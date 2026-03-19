@@ -9,71 +9,49 @@
   <body>
     <header class="topbar">
       <div>
-        <h1>Agentes Flow UI</h1>
-        <p>Monitoreo visual de orquestación ELROI (MVP)</p>
+        <h1>Agentes Flow UI · UX v2</h1>
+        <p>Grafo visual de orquestación estilo n8n lightweight</p>
       </div>
       <div id="last-refresh" class="chip">Cargando datos...</div>
     </header>
 
     <main class="layout">
-      <section class="panel">
-        <h2>Dashboard de agentes</h2>
-        <div id="agents-grid" class="agents-grid"></div>
+      <section class="panel graph-panel">
+        <div class="panel-head">
+          <h2>Flujo de orquestación</h2>
+          <p>Entrada → Orquestación → Delegación → Resultado</p>
+        </div>
+
+        <div class="flow-strip" aria-label="Etapas del flujo">
+          <span class="flow-step">Entrada</span>
+          <span class="flow-step">Orquestación</span>
+          <span class="flow-step">Delegación</span>
+          <span class="flow-step">Resultado</span>
+        </div>
+
+        <div id="graph-stage" class="graph-stage">
+          <svg id="flow-links" class="flow-links" aria-hidden="true"></svg>
+          <div id="nodes-layer" class="nodes-layer"></div>
+        </div>
       </section>
 
-      <section class="panel">
-        <h2>Flujo de delegación</h2>
-        <ol id="timeline" class="timeline"></ol>
-      </section>
-
-      <section class="panel">
-        <h2>Actividad reciente</h2>
-        <div id="activity-list" class="activity-list"></div>
-      </section>
+      <aside class="panel detail-panel">
+        <h2>Detalle de nodo</h2>
+        <div id="node-detail" class="node-detail empty">
+          <p>Haz click en un nodo para ver rol, habilidades y últimas interacciones.</p>
+        </div>
+      </aside>
     </main>
 
-    <template id="agent-card-template">
-      <article class="agent-card">
-        <div class="card-head">
-          <h3 class="agent-name"></h3>
-          <span class="status-badge"></span>
+    <template id="graph-node-template">
+      <button class="graph-node" type="button">
+        <div class="node-head">
+          <h3 class="node-name"></h3>
+          <span class="status-dot" title="estado"></span>
         </div>
-        <p class="agent-role"></p>
-        <div class="meta">
-          <strong>Skills:</strong>
-          <ul class="skills-list"></ul>
-        </div>
-        <div class="meta">
-          <strong>Tools:</strong>
-          <ul class="tools-list"></ul>
-        </div>
-      </article>
-    </template>
-
-    <template id="timeline-item-template">
-      <li class="timeline-item">
-        <div class="timeline-dot"></div>
-        <div class="timeline-content">
-          <div class="timeline-head">
-            <span class="timeline-type"></span>
-            <span class="timeline-time"></span>
-          </div>
-          <p class="timeline-text"></p>
-        </div>
-      </li>
-    </template>
-
-    <template id="activity-item-template">
-      <article class="activity-item">
-        <div>
-          <h3 class="activity-agent"></h3>
-          <p class="activity-last"></p>
-        </div>
-        <div class="activity-side">
-          <span class="activity-status"></span>
-          <time class="activity-relative"></time>
-        </div>
-      </article>
+        <p class="node-role"></p>
+        <div class="tools-badges"></div>
+      </button>
     </template>
 
     <script src="app.js" defer></script>

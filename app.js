@@ -1,106 +1,171 @@
 const STATUS_CLASS = {
+  ok: 'ok',
   running: 'running',
-  success: 'success',
-  error: 'error'
+  error: 'error',
+  success: 'ok'
 };
 
-function formatRelativeTime(isoTime) {
-  const now = new Date();
-  const then = new Date(isoTime);
-  const diffMs = now - then;
-  const diffMin = Math.floor(diffMs / 60000);
+const NODE_LAYOUT = {
+  main: { x: 46, y: 40 },
+  dev: { x: 18, y: 210 },
+  content: { x: 74, y: 210 },
+  ops: { x: 46, y: 360 },
+  office: { x: 18, y: 520 },
+  'agent-factory': { x: 74, y: 520 }
+};
 
-  if (diffMin < 1) return 'justo ahora';
-  if (diffMin < 60) return `hace ${diffMin} min`;
+const GRAPH_EDGES = [
+  ['main', 'dev'],
+  ['main', 'content'],
+  ['main', 'ops'],
+  ['ops', 'office'],
+  ['dev', 'agent-factory'],
+  ['content', 'main']
+];
 
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `hace ${diffHours} h`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `hace ${diffDays} d`;
+function normalizeStatus(status) {
+  return STATUS_CLASS[status] || 'running';
 }
 
-function statusLabel(status) {
-  if (status === 'running') return 'running';
-  if (status === 'success') return 'success';
-  if (status === 'error') return 'error';
-  return status;
+function createToolBadge(tool) {
+  const badge = document.createElement('span');
+  badge.className = 'tool-badge';
+  badge.textContent = tool;
+  return badge;
 }
 
-function renderAgents(agents) {
-  const grid = document.getElementById('agents-grid');
-  const tpl = document.getElementById('agent-card-template');
-  grid.innerHTML = '';
+function drawLinks(edges) {
+  const svg = document.getElementById('flow-links');
+  const stage = document.getElementById('graph-stage');
+  const nodesLayer = document.getElementById('nodes-layer');
+  const bounds = stage.getBoundingClientRect();
 
-  agents.forEach((agent) => {
-    const node = tpl.content.cloneNode(true);
-    node.querySelector('.agent-name').textContent = agent.name;
-    node.querySelector('.agent-role').textContent = agent.role;
+  svg.setAttribute('width', String(bounds.width));
+  svg.setAttribute('height', String(bounds.height));
+  svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
+  svg.innerHTML = '';
 
-    const badge = node.querySelector('.status-badge');
-    const cls = STATUS_CLASS[agent.status] || 'running';
-    badge.textContent = statusLabel(agent.status);
-    badge.classList.add(`status-${cls}`);
+  const lookup = Object.fromEntries(
+    Array.from(nodesLayer.querySelectorAll('.graph-node')).map((node) => [node.dataset.id, node])
+  );
 
-    const skillsList = node.querySelector('.skills-list');
-    agent.keySkills.forEach((skill) => {
-      const li = document.createElement('li');
-      li.textContent = skill;
-      skillsList.appendChild(li);
-    });
+  edges.forEach(([from, to], index) => {
+    const fromEl = lookup[from];
+    const toEl = lookup[to];
+    if (!fromEl || !toEl) return;
 
-    const toolsList = node.querySelector('.tools-list');
-    agent.keyTools.forEach((tool) => {
-      const li = document.createElement('li');
-      li.textContent = tool;
-      toolsList.appendChild(li);
-    });
+    const a = fromEl.getBoundingClientRect();
+    const b = toEl.getBoundingClientRect();
 
-    grid.appendChild(node);
+    const x1 = a.left - bounds.left + a.width / 2;
+    const y1 = a.top - bounds.top + a.height / 2;
+    const x2 = b.left - bounds.left + b.width / 2;
+    const y2 = b.top - bounds.top + b.height / 2;
+
+    const curve = Math.max(45, Math.abs(y2 - y1) * 0.45);
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${y1 + curve}, ${x2} ${y2 - curve}, ${x2} ${y2}`);
+    path.setAttribute('class', `graph-link ${index === edges.length - 1 ? 'back' : ''}`);
+    svg.appendChild(path);
   });
 }
 
-function renderTimeline(events) {
-  const list = document.getElementById('timeline');
-  const tpl = document.getElementById('timeline-item-template');
-  list.innerHTML = '';
+function collectInteractions(agentId, data) {
+  const direct = data.activityPanel
+    .filter((item) => item.agent === agentId)
+    .map((item) => ({
+      timestamp: item.timestamp,
+      text: item.lastInteraction
+    }));
 
-  events
-    .slice()
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-    .forEach((event) => {
-      const node = tpl.content.cloneNode(true);
-      node.querySelector('.timeline-type').textContent = event.type;
-      node.querySelector('.timeline-time').textContent = new Date(event.timestamp).toLocaleTimeString('es-ES', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      node.querySelector('.timeline-text').textContent = event.message;
-      list.appendChild(node);
-    });
+  const timelineMentions = data.flowTimeline
+    .filter((ev) => ev.message.toLowerCase().includes(agentId.toLowerCase()))
+    .map((ev) => ({
+      timestamp: ev.timestamp,
+      text: ev.message
+    }));
+
+  return [...direct, ...timelineMentions]
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, 4);
 }
 
-function renderActivity(activity) {
-  const list = document.getElementById('activity-list');
-  const tpl = document.getElementById('activity-item-template');
-  list.innerHTML = '';
+function renderDetail(agent, data) {
+  const detail = document.getElementById('node-detail');
+  const status = normalizeStatus(agent.status);
+  const interactions = collectInteractions(agent.id, data);
 
-  activity.forEach((item) => {
-    const node = tpl.content.cloneNode(true);
-    node.querySelector('.activity-agent').textContent = item.agent;
-    node.querySelector('.activity-last').textContent = item.lastInteraction;
+  detail.classList.remove('empty');
+  detail.innerHTML = `
+    <div class="detail-header">
+      <h3>${agent.name}</h3>
+      <span class="status-pill ${status}">${status}</span>
+    </div>
+    <div class="detail-block">
+      <h4>Rol</h4>
+      <p>${agent.role}</p>
+    </div>
+    <div class="detail-block">
+      <h4>Habilidades</h4>
+      <ul class="detail-list">
+        ${agent.keySkills.map((skill) => `<li>${skill}</li>`).join('')}
+      </ul>
+    </div>
+    <div class="detail-block">
+      <h4>Últimas interacciones</h4>
+      <ul class="detail-list">
+        ${interactions.length ? interactions.map((item) => `<li>${item.text}</li>`).join('') : '<li>Sin interacciones recientes</li>'}
+      </ul>
+    </div>
+  `;
+}
 
-    const status = node.querySelector('.activity-status');
-    const cls = STATUS_CLASS[item.status] || 'running';
-    status.textContent = statusLabel(item.status);
-    status.classList.add(`activity-${cls}`);
+function renderGraph(data) {
+  const layer = document.getElementById('nodes-layer');
+  const tpl = document.getElementById('graph-node-template');
+  layer.innerHTML = '';
 
-    const relative = node.querySelector('.activity-relative');
-    relative.textContent = formatRelativeTime(item.timestamp);
-    relative.dateTime = item.timestamp;
+  data.agents.forEach((agent) => {
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    const status = normalizeStatus(agent.status);
+    const pos = NODE_LAYOUT[agent.id] || { x: 10, y: 10 };
 
-    list.appendChild(node);
+    node.dataset.id = agent.id;
+    node.style.left = `${pos.x}%`;
+    node.style.top = `${pos.y}px`;
+
+    node.querySelector('.node-name').textContent = agent.name;
+    node.querySelector('.node-role').textContent = agent.role;
+
+    const dot = node.querySelector('.status-dot');
+    dot.classList.add(`status-${status}`);
+
+    const tools = node.querySelector('.tools-badges');
+    agent.keyTools.forEach((tool) => tools.appendChild(createToolBadge(tool)));
+
+    node.addEventListener('click', () => {
+      layer.querySelectorAll('.graph-node').forEach((el) => el.classList.remove('active'));
+      node.classList.add('active');
+      renderDetail(agent, data);
+    });
+
+    layer.appendChild(node);
   });
+
+  requestAnimationFrame(() => drawLinks(GRAPH_EDGES));
+}
+
+function fixMockFactoryStatus(data) {
+  const factory = data.agents.find((a) => a.id === 'agent-factory');
+  if (!factory) return;
+
+  const hasRealErrorEvent = data.activityPanel.some(
+    (item) => item.agent === 'agent-factory' && normalizeStatus(item.status) === 'error'
+  );
+
+  if (!hasRealErrorEvent && normalizeStatus(factory.status) === 'error') {
+    factory.status = 'ok';
+  }
 }
 
 async function init() {
@@ -109,12 +174,13 @@ async function init() {
     if (!response.ok) throw new Error('No se pudo cargar mock-data.json');
 
     const data = await response.json();
-    renderAgents(data.agents);
-    renderTimeline(data.flowTimeline);
-    renderActivity(data.activityPanel);
+    fixMockFactoryStatus(data);
+    renderGraph(data);
 
     const refresh = document.getElementById('last-refresh');
     refresh.textContent = `Actualizado: ${new Date(data.generatedAt).toLocaleString('es-ES')}`;
+
+    window.addEventListener('resize', () => drawLinks(GRAPH_EDGES));
   } catch (error) {
     console.error(error);
     const refresh = document.getElementById('last-refresh');
