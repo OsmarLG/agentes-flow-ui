@@ -1,2 +1,4 @@
 node_modules/
 .share/
+.env.local
+.env.*.local

@@ -34,6 +34,7 @@ const VIEW_LIMITS = {
 };
 
 const DEFAULT_POLL_INTERVAL_MS = 5000;
+const AUTH_TOKEN_KEY = 'agentes-flow-ui:auth-token';
 
 const viewState = {
   scale: 1,
@@ -49,9 +50,46 @@ let currentData = null;
 let pollTimer = null;
 let pollIntervalMs = DEFAULT_POLL_INTERVAL_MS;
 let firstRender = true;
+let authToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
 
 function normalizeStatus(status) {
   return STATUS_CLASS[status] || 'running';
+}
+
+function sourceClass(source) {
+  return source === 'real' ? 'source-real' : source === 'mixed' ? 'source-mixed' : 'source-fallback';
+}
+
+function sourceLabel(source) {
+  return source === 'real' ? 'REAL' : source === 'mixed' ? 'MIXED' : 'FALLBACK';
+}
+
+function setAuthenticatedUI(isAuthed) {
+  document.getElementById('login-screen').hidden = isAuthed;
+  document.getElementById('app-shell').hidden = !isAuthed;
+}
+
+function setAuthToken(token) {
+  authToken = token || '';
+  if (authToken) {
+    localStorage.setItem(AUTH_TOKEN_KEY, authToken);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  const response = await fetch(url, { ...options, headers, cache: 'no-store' });
+
+  if (response.status === 401) {
+    setAuthToken('');
+    setAuthenticatedUI(false);
+    throw new Error('No autenticado');
+  }
+
+  return response;
 }
 
 function createToolBadge(tool) {
@@ -71,19 +109,13 @@ function getDistance(a, b) {
 }
 
 function getMidpoint(a, b) {
-  return {
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2
-  };
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
 function stagePointFromClient(clientX, clientY) {
   const stage = document.getElementById('graph-stage');
   const rect = stage.getBoundingClientRect();
-  return {
-    x: clientX - rect.left,
-    y: clientY - rect.top
-  };
+  return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
 function setZoomAtPoint(nextScale, anchor) {
@@ -97,17 +129,13 @@ function setZoomAtPoint(nextScale, anchor) {
   viewState.scale = clamped;
   viewState.x = anchor.x - worldX * clamped;
   viewState.y = anchor.y - worldY * clamped;
-
   applyViewTransform();
 }
 
 function getGraphBounds() {
   const layer = document.getElementById('nodes-layer');
   const nodes = Array.from(layer.querySelectorAll('.graph-node'));
-
-  if (!nodes.length) {
-    return { minX: 0, minY: 0, maxX: CANVAS_SIZE.width, maxY: CANVAS_SIZE.height };
-  }
+  if (!nodes.length) return { minX: 0, minY: 0, maxX: CANVAS_SIZE.width, maxY: CANVAS_SIZE.height };
 
   let minX = Infinity;
   let minY = Infinity;
@@ -131,45 +159,30 @@ function getGraphBounds() {
 function fitGraphToStage() {
   const stage = document.getElementById('graph-stage');
   const bounds = getGraphBounds();
-  const stageW = stage.clientWidth;
-  const stageH = stage.clientHeight;
   const pad = 36;
-
   const graphW = bounds.maxX - bounds.minX;
   const graphH = bounds.maxY - bounds.minY;
-
-  const scaleX = (stageW - pad * 2) / graphW;
-  const scaleY = (stageH - pad * 2) / graphH;
-
-  const targetScale = Math.max(
-    VIEW_LIMITS.minScale,
-    Math.min(VIEW_LIMITS.maxScale, Math.min(scaleX, scaleY, 1.05))
-  );
+  const scaleX = (stage.clientWidth - pad * 2) / graphW;
+  const scaleY = (stage.clientHeight - pad * 2) / graphH;
+  const targetScale = Math.max(VIEW_LIMITS.minScale, Math.min(VIEW_LIMITS.maxScale, Math.min(scaleX, scaleY, 1.05)));
 
   viewState.scale = targetScale;
-
   const graphCenterX = (bounds.minX + bounds.maxX) / 2;
   const graphCenterY = (bounds.minY + bounds.maxY) / 2;
-
-  viewState.x = stageW / 2 - graphCenterX * targetScale;
-  viewState.y = stageH / 2 - graphCenterY * targetScale;
-
+  viewState.x = stage.clientWidth / 2 - graphCenterX * targetScale;
+  viewState.y = stage.clientHeight / 2 - graphCenterY * targetScale;
   applyViewTransform();
 }
 
 function drawLinks(edges) {
   const svg = document.getElementById('flow-links');
   const nodesLayer = document.getElementById('nodes-layer');
-
   svg.setAttribute('width', String(CANVAS_SIZE.width));
   svg.setAttribute('height', String(CANVAS_SIZE.height));
   svg.setAttribute('viewBox', `0 0 ${CANVAS_SIZE.width} ${CANVAS_SIZE.height}`);
   svg.innerHTML = '';
 
-  const lookup = Object.fromEntries(
-    Array.from(nodesLayer.querySelectorAll('.graph-node')).map((node) => [node.dataset.id, node])
-  );
-
+  const lookup = Object.fromEntries(Array.from(nodesLayer.querySelectorAll('.graph-node')).map((n) => [n.dataset.id, n]));
   edges.forEach(([from, to], index) => {
     const fromEl = lookup[from];
     const toEl = lookup[to];
@@ -188,30 +201,29 @@ function drawLinks(edges) {
   });
 }
 
-function collectInteractions(agentId, data) {
+function collectInteractions(agentId, data, activityData) {
   const direct = (data.activityPanel || [])
     .filter((item) => item.agent === agentId)
-    .map((item) => ({
-      timestamp: item.timestamp,
-      text: item.lastInteraction
-    }));
+    .map((item) => ({ timestamp: item.timestamp, text: item.lastInteraction }));
 
   const timelineMentions = (data.flowTimeline || [])
     .filter((ev) => String(ev.message || '').toLowerCase().includes(agentId.toLowerCase()))
-    .map((ev) => ({
-      timestamp: ev.timestamp,
-      text: ev.message
-    }));
+    .map((ev) => ({ timestamp: ev.timestamp, text: ev.message }));
 
-  return [...direct, ...timelineMentions]
+  const backendActivity = (activityData.byAgent?.[agentId] || []).map((item) => ({
+    timestamp: item.timestamp,
+    text: `${item.message} (${sourceLabel(item.source)})`
+  }));
+
+  return [...backendActivity, ...direct, ...timelineMentions]
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .slice(0, 4);
 }
 
-function renderDetail(agent, data) {
+function renderDetail(agent, data, activityData) {
   const detail = document.getElementById('node-detail');
   const status = normalizeStatus(agent.status);
-  const interactions = collectInteractions(agent.id, data);
+  const interactions = collectInteractions(agent.id, data, activityData);
 
   detail.classList.remove('empty');
   detail.innerHTML = `
@@ -225,9 +237,7 @@ function renderDetail(agent, data) {
     </div>
     <div class="detail-block">
       <h4>Habilidades</h4>
-      <ul class="detail-list">
-        ${(agent.keySkills || []).map((skill) => `<li>${skill}</li>`).join('')}
-      </ul>
+      <ul class="detail-list">${(agent.keySkills || []).map((skill) => `<li>${skill}</li>`).join('')}</ul>
     </div>
     <div class="detail-block">
       <h4>Últimas interacciones</h4>
@@ -238,7 +248,7 @@ function renderDetail(agent, data) {
   `;
 }
 
-function renderGraph(data, { fit = false } = {}) {
+function renderGraph(data, activityData, { fit = false } = {}) {
   const layer = document.getElementById('nodes-layer');
   const tpl = document.getElementById('graph-node-template');
   layer.innerHTML = '';
@@ -251,12 +261,9 @@ function renderGraph(data, { fit = false } = {}) {
     node.dataset.id = agent.id;
     node.style.left = `${pos.x}px`;
     node.style.top = `${pos.y}px`;
-
     node.querySelector('.node-name').textContent = agent.name;
     node.querySelector('.node-role').textContent = agent.role;
-
-    const dot = node.querySelector('.status-dot');
-    dot.classList.add(`status-${status}`);
+    node.querySelector('.status-dot').classList.add(`status-${status}`);
 
     const tools = node.querySelector('.tools-badges');
     (agent.keyTools || []).forEach((tool) => tools.appendChild(createToolBadge(tool)));
@@ -265,7 +272,7 @@ function renderGraph(data, { fit = false } = {}) {
       selectedAgentId = agent.id;
       layer.querySelectorAll('.graph-node').forEach((el) => el.classList.remove('active'));
       node.classList.add('active');
-      renderDetail(agent, data);
+      renderDetail(agent, data, activityData);
     });
 
     layer.appendChild(node);
@@ -274,31 +281,68 @@ function renderGraph(data, { fit = false } = {}) {
   requestAnimationFrame(() => {
     drawLinks(GRAPH_EDGES);
     if (fit) fitGraphToStage();
-
     if (selectedAgentId) {
       const activeNode = layer.querySelector(`.graph-node[data-id="${selectedAgentId}"]`);
       const selectedAgent = (data.agents || []).find((a) => a.id === selectedAgentId);
       if (activeNode && selectedAgent) {
         activeNode.classList.add('active');
-        renderDetail(selectedAgent, data);
+        renderDetail(selectedAgent, data, activityData);
       }
     }
   });
 }
 
+function renderGeneralActivity(activityData) {
+  const list = document.getElementById('general-activity-list');
+  const sourceChip = document.getElementById('general-activity-source');
+  const source = activityData.sourceSummary?.general || 'fallback';
+  sourceChip.className = `chip source-chip ${sourceClass(source)}`;
+  sourceChip.textContent = `Origen: ${sourceLabel(source)}`;
+
+  const items = activityData.general || [];
+  list.innerHTML = items.length
+    ? items
+        .slice(0, 8)
+        .map(
+          (item) => `<li><span class="activity-meta">${new Date(item.timestamp).toLocaleString('es-ES')} · ${sourceLabel(item.source)}</span><span>${item.agent ? `[${item.agent}] ` : ''}${item.message}</span></li>`
+        )
+        .join('')
+    : '<li>Sin actividad reciente.</li>';
+}
+
+function renderPerAgentActivity(activityData) {
+  const wrap = document.getElementById('per-agent-activity');
+  const sourceChip = document.getElementById('per-agent-activity-source');
+  const source = activityData.sourceSummary?.byAgent || 'fallback';
+  sourceChip.className = `chip source-chip ${sourceClass(source)}`;
+  sourceChip.textContent = `Origen: ${sourceLabel(source)}`;
+
+  const html = Object.entries(activityData.byAgent || {})
+    .map(([agentId, events]) => {
+      const body = (events || []).length
+        ? events
+            .map(
+              (ev) => `<li><span class="activity-meta">${new Date(ev.timestamp).toLocaleString('es-ES')} · ${sourceLabel(ev.source)}</span><span>${ev.message}</span></li>`
+            )
+            .join('')
+        : '<li>Sin actividad.</li>';
+      return `<section class="agent-activity-card"><h4>${agentId}</h4><ul class="detail-list">${body}</ul></section>`;
+    })
+    .join('');
+
+  wrap.innerHTML = html || '<p class="muted">Sin actividad por agente.</p>';
+}
+
 function updateRefreshChip({ ok, generatedAt, message }) {
   const refresh = document.getElementById('last-refresh');
   refresh.classList.remove('chip-live', 'chip-stale', 'chip-offline');
-
   if (ok) {
     refresh.classList.add('chip-live');
     refresh.textContent = `LIVE · ${new Date(generatedAt).toLocaleString('es-ES')}`;
     return;
   }
-
-  const staleLabel = message || 'stale/offline';
   refresh.classList.add('chip-offline');
-  refresh.textContent = staleLabel;
+  refresh.textContent = message || 'stale/offline';
 }
 
 function setupInteractions() {
@@ -319,12 +363,7 @@ function setupInteractions() {
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (pointers.size === 1 && !event.target.closest('.graph-node')) {
-      dragState = {
-        startX: event.clientX,
-        startY: event.clientY,
-        originX: viewState.x,
-        originY: viewState.y
-      };
+      dragState = { startX: event.clientX, startY: event.clientY, originX: viewState.x, originY: viewState.y };
     }
 
     if (pointers.size === 2) {
@@ -344,81 +383,54 @@ function setupInteractions() {
 
     if (pinchState && pointers.size >= 2) {
       const [a, b] = Array.from(pointers.values());
-      const distance = getDistance(a, b);
-      const ratio = distance / pinchState.startDistance;
+      const ratio = getDistance(a, b) / pinchState.startDistance;
       const midpoint = getMidpoint(a, b);
-      pinchState.midpoint = stagePointFromClient(midpoint.x, midpoint.y);
-      setZoomAtPoint(pinchState.startScale * ratio, pinchState.midpoint);
+      setZoomAtPoint(pinchState.startScale * ratio, stagePointFromClient(midpoint.x, midpoint.y));
       return;
     }
 
     if (dragState) {
-      const dx = event.clientX - dragState.startX;
-      const dy = event.clientY - dragState.startY;
-      viewState.x = dragState.originX + dx;
-      viewState.y = dragState.originY + dy;
+      viewState.x = dragState.originX + (event.clientX - dragState.startX);
+      viewState.y = dragState.originY + (event.clientY - dragState.startY);
       applyViewTransform();
     }
   });
 
   const endPointer = (event) => {
     pointers.delete(event.pointerId);
-
-    if (pointers.size < 2) {
-      pinchState = null;
-    }
-
-    if (pointers.size === 0) {
-      dragState = null;
-    }
+    if (pointers.size < 2) pinchState = null;
+    if (pointers.size === 0) dragState = null;
   };
 
   stage.addEventListener('pointerup', endPointer);
   stage.addEventListener('pointercancel', endPointer);
   stage.addEventListener('pointerleave', endPointer);
 
-  zoomInBtn.addEventListener('click', () => {
-    const center = { x: stage.clientWidth / 2, y: stage.clientHeight / 2 };
-    setZoomAtPoint(viewState.scale * 1.18, center);
-  });
-
-  zoomOutBtn.addEventListener('click', () => {
-    const center = { x: stage.clientWidth / 2, y: stage.clientHeight / 2 };
-    setZoomAtPoint(viewState.scale / 1.18, center);
-  });
-
+  zoomInBtn.addEventListener('click', () => setZoomAtPoint(viewState.scale * 1.18, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 }));
+  zoomOutBtn.addEventListener('click', () => setZoomAtPoint(viewState.scale / 1.18, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 }));
   zoomResetBtn.addEventListener('click', () => fitGraphToStage());
 }
 
-function fixMockFactoryStatus(data) {
-  const factory = (data.agents || []).find((a) => a.id === 'agent-factory');
-  if (!factory) return;
-
-  const hasRealErrorEvent = (data.activityPanel || []).some(
-    (item) => item.agent === 'agent-factory' && normalizeStatus(item.status) === 'error'
-  );
-
-  if (!hasRealErrorEvent && normalizeStatus(factory.status) === 'error') {
-    factory.status = 'ok';
-  }
+async function loadAgents() {
+  const response = await apiFetch('/api/agents');
+  if (!response.ok) throw new Error(`API /api/agents respondió ${response.status}`);
+  return response.json();
 }
 
-async function loadAgents() {
-  const response = await fetch('/api/agents', { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error(`API /api/agents respondió ${response.status}`);
-  }
+async function loadActivity() {
+  const response = await apiFetch('/api/activity?limitPerAgent=5');
+  if (!response.ok) throw new Error(`API /api/activity respondió ${response.status}`);
   return response.json();
 }
 
 async function refreshData() {
   try {
-    const data = await loadAgents();
+    const [data, activityData] = await Promise.all([loadAgents(), loadActivity()]);
     pollIntervalMs = Number(data.pollIntervalMs) > 0 ? Number(data.pollIntervalMs) : pollIntervalMs;
-
-    fixMockFactoryStatus(data);
     currentData = data;
-    renderGraph(data, { fit: firstRender });
+    renderGraph(data, activityData, { fit: firstRender });
+    renderGeneralActivity(activityData);
+    renderPerAgentActivity(activityData);
     firstRender = false;
     updateRefreshChip({ ok: true, generatedAt: data.generatedAt });
   } catch (error) {
@@ -426,21 +438,73 @@ async function refreshData() {
     updateRefreshChip({ ok: false, message: 'stale/offline · API no disponible' });
   } finally {
     clearTimeout(pollTimer);
-    pollTimer = setTimeout(refreshData, pollIntervalMs || DEFAULT_POLL_INTERVAL_MS);
+    if (authToken) pollTimer = setTimeout(refreshData, pollIntervalMs || DEFAULT_POLL_INTERVAL_MS);
   }
+}
+
+async function checkSession() {
+  if (!authToken) return false;
+  try {
+    const response = await apiFetch('/api/session');
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function setupAuth() {
+  const form = document.getElementById('login-form');
+  const input = document.getElementById('login-password');
+  const errorEl = document.getElementById('login-error');
+  const logoutBtn = document.getElementById('logout-btn');
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    errorEl.textContent = '';
+
+    const password = input.value;
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.token) {
+      errorEl.textContent = payload.error || 'No fue posible iniciar sesión';
+      return;
+    }
+
+    setAuthToken(payload.token);
+    input.value = '';
+    setAuthenticatedUI(true);
+    await refreshData();
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await apiFetch('/api/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    clearTimeout(pollTimer);
+    setAuthToken('');
+    setAuthenticatedUI(false);
+  });
 }
 
 async function init() {
   setupInteractions();
+  setupAuth();
 
   window.addEventListener('resize', () => {
     drawLinks(GRAPH_EDGES);
-    if (firstRender) {
-      fitGraphToStage();
-    }
+    if (firstRender) fitGraphToStage();
   });
 
-  await refreshData();
+  const authed = await checkSession();
+  setAuthenticatedUI(authed);
+  if (authed) await refreshData();
 }
 
 init();

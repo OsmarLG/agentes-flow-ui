@@ -7,49 +7,83 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <h1>Agentes Flow UI · UX v2</h1>
-        <p>Grafo visual de orquestación estilo n8n lightweight</p>
-      </div>
-      <div id="last-refresh" class="chip">Cargando datos...</div>
-    </header>
+    <section id="login-screen" class="login-screen">
+      <form id="login-form" class="login-card">
+        <h1>Agentes Flow UI</h1>
+        <p>Acceso protegido. Ingresa la contraseña del dashboard.</p>
+        <label for="login-password">Contraseña</label>
+        <input id="login-password" type="password" required autocomplete="current-password" />
+        <button type="submit">Entrar</button>
+        <p id="login-error" class="login-error" aria-live="polite"></p>
+      </form>
+    </section>
 
-    <main class="layout">
-      <section class="panel graph-panel">
-        <div class="panel-head">
-          <h2>Flujo de orquestación</h2>
-          <p>Entrada → Orquestación → Delegación → Resultado</p>
+    <div id="app-shell" hidden>
+      <header class="topbar">
+        <div>
+          <h1>Agentes Flow UI · UX v2</h1>
+          <p>Grafo visual de orquestación estilo n8n lightweight</p>
         </div>
-
-        <div class="flow-strip" aria-label="Etapas del flujo">
-          <span class="flow-step">Entrada</span>
-          <span class="flow-step">Orquestación</span>
-          <span class="flow-step">Delegación</span>
-          <span class="flow-step">Resultado</span>
+        <div class="topbar-actions">
+          <div id="last-refresh" class="chip">Cargando datos...</div>
+          <button id="logout-btn" class="ghost-btn" type="button">Salir</button>
         </div>
+      </header>
 
-        <div id="graph-stage" class="graph-stage" aria-label="Canvas interactivo del grafo">
-          <div class="graph-controls" aria-label="Controles de zoom">
-            <button id="zoom-in" class="zoom-btn" type="button" title="Acercar">+</button>
-            <button id="zoom-out" class="zoom-btn" type="button" title="Alejar">-</button>
-            <button id="zoom-reset" class="zoom-btn zoom-reset" type="button" title="Centrar y resetear">Centrar</button>
+      <main class="layout">
+        <section class="panel graph-panel">
+          <div class="panel-head">
+            <h2>Flujo de orquestación</h2>
+            <p>Entrada → Orquestación → Delegación → Resultado</p>
           </div>
 
-          <div id="graph-viewport" class="graph-viewport">
-            <svg id="flow-links" class="flow-links" aria-hidden="true"></svg>
-            <div id="nodes-layer" class="nodes-layer"></div>
+          <div class="flow-strip" aria-label="Etapas del flujo">
+            <span class="flow-step">Entrada</span>
+            <span class="flow-step">Orquestación</span>
+            <span class="flow-step">Delegación</span>
+            <span class="flow-step">Resultado</span>
           </div>
-        </div>
+
+          <div id="graph-stage" class="graph-stage" aria-label="Canvas interactivo del grafo">
+            <div class="graph-controls" aria-label="Controles de zoom">
+              <button id="zoom-in" class="zoom-btn" type="button" title="Acercar">+</button>
+              <button id="zoom-out" class="zoom-btn" type="button" title="Alejar">-</button>
+              <button id="zoom-reset" class="zoom-btn zoom-reset" type="button" title="Centrar y resetear">Centrar</button>
+            </div>
+
+            <div id="graph-viewport" class="graph-viewport">
+              <svg id="flow-links" class="flow-links" aria-hidden="true"></svg>
+              <div id="nodes-layer" class="nodes-layer"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel detail-panel">
+          <h2>Detalle de nodo</h2>
+          <div id="node-detail" class="node-detail empty">
+            <p>Haz click en un nodo para ver rol, habilidades y últimas interacciones.</p>
+          </div>
+        </aside>
+      </main>
+
+      <section class="layout activity-layout">
+        <section class="panel">
+          <div class="panel-head inline-head">
+            <h2>Actividad general reciente</h2>
+            <span id="general-activity-source" class="chip source-chip">Origen: -</span>
+          </div>
+          <ul id="general-activity-list" class="detail-list activity-list"></ul>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head inline-head">
+            <h2>Actividad por agente</h2>
+            <span id="per-agent-activity-source" class="chip source-chip">Origen: -</span>
+          </div>
+          <div id="per-agent-activity" class="agent-activity-grid"></div>
+        </section>
       </section>
-
-      <aside class="panel detail-panel">
-        <h2>Detalle de nodo</h2>
-        <div id="node-detail" class="node-detail empty">
-          <p>Haz click en un nodo para ver rol, habilidades y últimas interacciones.</p>
-        </div>
-      </aside>
-    </main>
+    </div>
 
     <template id="graph-node-template">
       <button class="graph-node" type="button">

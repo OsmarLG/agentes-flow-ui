@@ -2,28 +2,43 @@
 
 UX v2 de interfaz visual para monitorear la orquestación de agentes ELROI en HTML/CSS/JS vanilla.
 
-## Fase 1 (demo funcional)
+## Novedades
 
-Ahora la UI consume **agentes reales** desde OpenClaw vía backend local:
+### 1) Actividad real visible
 
-- `GET /api/agents` → ejecuta `openclaw agents list --json`
-- `GET /api/health` → `{ ok, timestamp, pollIntervalMs }`
-- Frontend hace polling automático (default `5000ms`)
-- Si cae la API, muestra badge `stale/offline` y conserva la última vista renderizada
+Nuevo endpoint backend:
 
-## Incluye
+- `GET /api/activity`
 
-- Vista principal tipo **grafo de nodos** (estilo n8n lightweight)
-- Nodos por agente con estado visual (`ok`, `running`, `error`)
-- Enlaces/conexiones con animación de flujo (SVG + dashed animation)
-- Panel lateral de detalle al click en nodo:
-  - rol
-  - habilidades
-  - últimas interacciones
-- Navegación del canvas:
-  - pan con drag (mouse/touch)
-  - zoom con rueda (desktop) y pinch (touch)
-  - controles visibles `+`, `-`, `Centrar`
+Entrega:
+
+- actividad general reciente del sistema
+- actividad reciente por agente (últimas N)
+- `sourceSummary` para indicar origen de datos (`real`, `mixed`, `fallback`)
+
+Estrategia actual de datos:
+
+- **Real**: lectura de sesiones recientes en `~/.openclaw/agents/*/sessions/sessions.json` + eventos de `~/.openclaw/logs/config-audit.jsonl`.
+- **Fallback explícito**: cuando faltan eventos reales suficientes, completa con mock y marca cada item como `source: "fallback"`.
+
+En frontend se muestran:
+
+- panel de actividad general
+- panel de actividad por agente
+- badge de origen (`REAL`, `MIXED`, `FALLBACK`)
+- polling junto con la carga de agentes
+
+### 2) Protección por contraseña
+
+Se agregó acceso con contraseña **antes** del dashboard.
+
+- `POST /api/login` recibe `{ password }` y devuelve token temporal en memoria
+- `POST /api/logout` invalida token
+- `GET /api/session` valida token actual
+- rutas de datos (`/api/agents`, `/api/activity`) requieren autenticación
+- frontend **no** contiene contraseña hardcodeada
+
+> Nota: el token se guarda en `localStorage` para demo local.
 
 ## Estructura
 
@@ -40,7 +55,7 @@ Ahora la UI consume **agentes reales** desde OpenClaw vía backend local:
 └── styles.css
 ```
 
-## Correr local (frontend + API)
+## Configuración local
 
 1) Instalar dependencias:
 
@@ -48,7 +63,23 @@ Ahora la UI consume **agentes reales** desde OpenClaw vía backend local:
 npm install
 ```
 
-2) Levantar servidor:
+2) Crear `.env.local` (no se versiona):
+
+```bash
+cp .env.example .env.local
+```
+
+3) Editar `.env.local` y definir:
+
+```bash
+DASH_PASSWORD=tu_password_seguro
+PORT=8080
+POLL_INTERVAL_MS=5000
+OPENCLAW_BIN=openclaw
+# OPENCLAW_HOME=/root/.openclaw
+```
+
+4) Levantar servidor:
 
 ```bash
 npm start
@@ -56,26 +87,19 @@ npm start
 
 Abrir: <http://localhost:8080>
 
-### Variables
-
-- `PORT` (default: `8080`)
-- `POLL_INTERVAL_MS` (default: `5000`)
-- `OPENCLAW_BIN` (default: `openclaw`)
-
-Ejemplo:
-
-```bash
-PORT=8080 POLL_INTERVAL_MS=3000 npm start
-```
-
 ## Endpoints
 
+Públicos:
+
 - `GET /api/health`
+- `POST /api/login`
+
+Protegidos (Bearer token):
+
+- `GET /api/session`
+- `POST /api/logout`
 - `GET /api/agents`
-
-## Nota de data layer
-
-Se mantiene la UI actual (grafo + panel). Solo se reemplaza la capa de datos principal por agentes reales de OpenClaw; elementos de timeline/mock quedan como apoyo visual para la demo.
+- `GET /api/activity?limitPerAgent=5`
 
 ## Repo
 
