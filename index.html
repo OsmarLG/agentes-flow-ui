@@ -29,9 +29,17 @@
           <span class="flow-step">Resultado</span>
         </div>
 
-        <div id="graph-stage" class="graph-stage">
-          <svg id="flow-links" class="flow-links" aria-hidden="true"></svg>
-          <div id="nodes-layer" class="nodes-layer"></div>
+        <div id="graph-stage" class="graph-stage" aria-label="Canvas interactivo del grafo">
+          <div class="graph-controls" aria-label="Controles de zoom">
+            <button id="zoom-in" class="zoom-btn" type="button" title="Acercar">+</button>
+            <button id="zoom-out" class="zoom-btn" type="button" title="Alejar">-</button>
+            <button id="zoom-reset" class="zoom-btn zoom-reset" type="button" title="Centrar y resetear">Centrar</button>
+          </div>
+
+          <div id="graph-viewport" class="graph-viewport">
+            <svg id="flow-links" class="flow-links" aria-hidden="true"></svg>
+            <div id="nodes-layer" class="nodes-layer"></div>
+          </div>
         </div>
       </section>
 

@@ -18,6 +18,11 @@ UX v2 de interfaz visual para monitorear la orquestación de agentes ELROI en HT
   - rol
   - habilidades
   - últimas interacciones
+- Navegación del canvas:
+  - pan con drag (mouse/touch)
+  - zoom con rueda (desktop) y pinch (touch)
+  - controles visibles `+`, `-`, `Centrar`
+  - límites de zoom y centrado automático responsive en móvil
 - Ajuste de mock para `agent-factory` sin error por defecto (solo error ante evento real)
 
 ## Estructura
