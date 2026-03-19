@@ -33,6 +33,8 @@ const VIEW_LIMITS = {
   maxScale: 2.2
 };
 
+const DEFAULT_POLL_INTERVAL_MS = 5000;
+
 const viewState = {
   scale: 1,
   x: 0,
@@ -43,6 +45,10 @@ const pointers = new Map();
 let pinchState = null;
 let dragState = null;
 let selectedAgentId = null;
+let currentData = null;
+let pollTimer = null;
+let pollIntervalMs = DEFAULT_POLL_INTERVAL_MS;
+let firstRender = true;
 
 function normalizeStatus(status) {
   return STATUS_CLASS[status] || 'running';
@@ -183,15 +189,15 @@ function drawLinks(edges) {
 }
 
 function collectInteractions(agentId, data) {
-  const direct = data.activityPanel
+  const direct = (data.activityPanel || [])
     .filter((item) => item.agent === agentId)
     .map((item) => ({
       timestamp: item.timestamp,
       text: item.lastInteraction
     }));
 
-  const timelineMentions = data.flowTimeline
-    .filter((ev) => ev.message.toLowerCase().includes(agentId.toLowerCase()))
+  const timelineMentions = (data.flowTimeline || [])
+    .filter((ev) => String(ev.message || '').toLowerCase().includes(agentId.toLowerCase()))
     .map((ev) => ({
       timestamp: ev.timestamp,
       text: ev.message
@@ -220,7 +226,7 @@ function renderDetail(agent, data) {
     <div class="detail-block">
       <h4>Habilidades</h4>
       <ul class="detail-list">
-        ${agent.keySkills.map((skill) => `<li>${skill}</li>`).join('')}
+        ${(agent.keySkills || []).map((skill) => `<li>${skill}</li>`).join('')}
       </ul>
     </div>
     <div class="detail-block">
@@ -232,7 +238,7 @@ function renderDetail(agent, data) {
   `;
 }
 
-function renderGraph(data) {
+function renderGraph(data, { fit = false } = {}) {
   const layer = document.getElementById('nodes-layer');
   const tpl = document.getElementById('graph-node-template');
   layer.innerHTML = '';
@@ -253,7 +259,7 @@ function renderGraph(data) {
     dot.classList.add(`status-${status}`);
 
     const tools = node.querySelector('.tools-badges');
-    agent.keyTools.forEach((tool) => tools.appendChild(createToolBadge(tool)));
+    (agent.keyTools || []).forEach((tool) => tools.appendChild(createToolBadge(tool)));
 
     node.addEventListener('click', () => {
       selectedAgentId = agent.id;
@@ -267,8 +273,32 @@ function renderGraph(data) {
 
   requestAnimationFrame(() => {
     drawLinks(GRAPH_EDGES);
-    fitGraphToStage();
+    if (fit) fitGraphToStage();
+
+    if (selectedAgentId) {
+      const activeNode = layer.querySelector(`.graph-node[data-id="${selectedAgentId}"]`);
+      const selectedAgent = (data.agents || []).find((a) => a.id === selectedAgentId);
+      if (activeNode && selectedAgent) {
+        activeNode.classList.add('active');
+        renderDetail(selectedAgent, data);
+      }
+    }
   });
+}
+
+function updateRefreshChip({ ok, generatedAt, message }) {
+  const refresh = document.getElementById('last-refresh');
+  refresh.classList.remove('chip-live', 'chip-stale', 'chip-offline');
+
+  if (ok) {
+    refresh.classList.add('chip-live');
+    refresh.textContent = `LIVE · ${new Date(generatedAt).toLocaleString('es-ES')}`;
+    return;
+  }
+
+  const staleLabel = message || 'stale/offline';
+  refresh.classList.add('chip-offline');
+  refresh.textContent = staleLabel;
 }
 
 function setupInteractions() {
@@ -361,10 +391,10 @@ function setupInteractions() {
 }
 
 function fixMockFactoryStatus(data) {
-  const factory = data.agents.find((a) => a.id === 'agent-factory');
+  const factory = (data.agents || []).find((a) => a.id === 'agent-factory');
   if (!factory) return;
 
-  const hasRealErrorEvent = data.activityPanel.some(
+  const hasRealErrorEvent = (data.activityPanel || []).some(
     (item) => item.agent === 'agent-factory' && normalizeStatus(item.status) === 'error'
   );
 
@@ -373,34 +403,44 @@ function fixMockFactoryStatus(data) {
   }
 }
 
-async function init() {
+async function loadAgents() {
+  const response = await fetch('/api/agents', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`API /api/agents respondió ${response.status}`);
+  }
+  return response.json();
+}
+
+async function refreshData() {
   try {
-    const response = await fetch('./data/mock-data.json');
-    if (!response.ok) throw new Error('No se pudo cargar mock-data.json');
+    const data = await loadAgents();
+    pollIntervalMs = Number(data.pollIntervalMs) > 0 ? Number(data.pollIntervalMs) : pollIntervalMs;
 
-    const data = await response.json();
     fixMockFactoryStatus(data);
-    renderGraph(data);
-    setupInteractions();
-
-    const refresh = document.getElementById('last-refresh');
-    refresh.textContent = `Actualizado: ${new Date(data.generatedAt).toLocaleString('es-ES')}`;
-
-    window.addEventListener('resize', () => {
-      drawLinks(GRAPH_EDGES);
-      fitGraphToStage();
-
-      if (selectedAgentId) {
-        const active = document.querySelector(`.graph-node[data-id="${selectedAgentId}"]`);
-        active?.classList.add('active');
-      }
-    });
+    currentData = data;
+    renderGraph(data, { fit: firstRender });
+    firstRender = false;
+    updateRefreshChip({ ok: true, generatedAt: data.generatedAt });
   } catch (error) {
     console.error(error);
-    const refresh = document.getElementById('last-refresh');
-    refresh.textContent = 'Error cargando datos';
-    refresh.style.color = 'var(--error)';
+    updateRefreshChip({ ok: false, message: 'stale/offline · API no disponible' });
+  } finally {
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(refreshData, pollIntervalMs || DEFAULT_POLL_INTERVAL_MS);
   }
+}
+
+async function init() {
+  setupInteractions();
+
+  window.addEventListener('resize', () => {
+    drawLinks(GRAPH_EDGES);
+    if (firstRender) {
+      fitGraphToStage();
+    }
+  });
+
+  await refreshData();
 }
 
 init();

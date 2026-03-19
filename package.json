@@ -1,0 +1,13 @@
+{
+  "name": "agentes-flow-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Flow UI con backend mínimo para agentes reales OpenClaw",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

@@ -2,18 +2,20 @@
 
 UX v2 de interfaz visual para monitorear la orquestación de agentes ELROI en HTML/CSS/JS vanilla.
 
+## Fase 1 (demo funcional)
+
+Ahora la UI consume **agentes reales** desde OpenClaw vía backend local:
+
+- `GET /api/agents` → ejecuta `openclaw agents list --json`
+- `GET /api/health` → `{ ok, timestamp, pollIntervalMs }`
+- Frontend hace polling automático (default `5000ms`)
+- Si cae la API, muestra badge `stale/offline` y conserva la última vista renderizada
+
 ## Incluye
 
 - Vista principal tipo **grafo de nodos** (estilo n8n lightweight)
-- Nodos por agente (`main`, `content`, `ops`, `dev`, `office`, `agent-factory`) con:
-  - estado visual (`ok`, `running`, `error`)
-  - badges de tools
+- Nodos por agente con estado visual (`ok`, `running`, `error`)
 - Enlaces/conexiones con animación de flujo (SVG + dashed animation)
-- Flujo macro en 4 etapas:
-  - Entrada
-  - Orquestación
-  - Delegación
-  - Resultado
 - Panel lateral de detalle al click en nodo:
   - rol
   - habilidades
@@ -22,8 +24,6 @@ UX v2 de interfaz visual para monitorear la orquestación de agentes ELROI en HT
   - pan con drag (mouse/touch)
   - zoom con rueda (desktop) y pinch (touch)
   - controles visibles `+`, `-`, `Centrar`
-  - límites de zoom y centrado automático responsive en móvil
-- Ajuste de mock para `agent-factory` sin error por defecto (solo error ante evento real)
 
 ## Estructura
 
@@ -33,39 +33,49 @@ UX v2 de interfaz visual para monitorear la orquestación de agentes ELROI en HT
 ├── data/
 │   └── mock-data.json
 ├── index.html
+├── package.json
+├── server.js
 ├── scripts/
 │   └── share.sh
 └── styles.css
 ```
 
-## Correr local
+## Correr local (frontend + API)
 
-Opción 1 (Python):
+1) Instalar dependencias:
 
 ```bash
-python3 -m http.server 8080
+npm install
 ```
 
-Opción 2 (Node):
+2) Levantar servidor:
 
 ```bash
-npx --yes http-server . -p 8080 -c-1
+npm start
 ```
 
 Abrir: <http://localhost:8080>
 
-## Share temporal
+### Variables
+
+- `PORT` (default: `8080`)
+- `POLL_INTERVAL_MS` (default: `5000`)
+- `OPENCLAW_BIN` (default: `openclaw`)
+
+Ejemplo:
 
 ```bash
-chmod +x scripts/share.sh
-./scripts/share.sh 8080
+PORT=8080 POLL_INTERVAL_MS=3000 npm start
 ```
 
-En otra terminal (si tienes ngrok):
+## Endpoints
 
-```bash
-ngrok http 8080
-```
+- `GET /api/health`
+- `GET /api/agents`
+
+## Nota de data layer
+
+Se mantiene la UI actual (grafo + panel). Solo se reemplaza la capa de datos principal por agentes reales de OpenClaw; elementos de timeline/mock quedan como apoyo visual para la demo.
 
 ## Repo
 

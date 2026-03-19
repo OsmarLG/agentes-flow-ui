@@ -42,6 +42,24 @@ body {
   font-size: 0.85rem;
 }
 
+.chip-live {
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.chip-stale {
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.chip-offline {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.12);
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 2.1fr) minmax(320px, 0.9fr);
