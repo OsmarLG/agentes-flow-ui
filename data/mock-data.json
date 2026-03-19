@@ -1,0 +1,128 @@
+{
+  "generatedAt": "2026-03-19T19:45:00.000Z",
+  "agents": [
+    {
+      "id": "main",
+      "name": "main",
+      "role": "Orquestador principal y consolidador final",
+      "keySkills": ["routing", "context synthesis", "quality gate"],
+      "keyTools": ["read", "exec", "sessions_yield"],
+      "status": "running"
+    },
+    {
+      "id": "content",
+      "name": "content",
+      "role": "Generación de copy y estructura narrativa",
+      "keySkills": ["UX writing", "summaries", "tone control"],
+      "keyTools": ["read", "write"],
+      "status": "success"
+    },
+    {
+      "id": "ops",
+      "name": "ops",
+      "role": "Automatización operativa y despliegues",
+      "keySkills": ["scripts", "runtime checks", "incident handling"],
+      "keyTools": ["exec", "process"],
+      "status": "success"
+    },
+    {
+      "id": "dev",
+      "name": "dev",
+      "role": "Implementación técnica y refactor",
+      "keySkills": ["frontend", "api integration", "tests"],
+      "keyTools": ["read", "edit", "write"],
+      "status": "running"
+    },
+    {
+      "id": "office",
+      "name": "office",
+      "role": "Gestión administrativa y documentación",
+      "keySkills": ["docs", "planning", "coordination"],
+      "keyTools": ["write", "read"],
+      "status": "success"
+    },
+    {
+      "id": "agent-factory",
+      "name": "agent-factory",
+      "role": "Diseño y mantenimiento de nuevos agentes",
+      "keySkills": ["agent templates", "policy alignment", "skills design"],
+      "keyTools": ["write", "edit", "exec"],
+      "status": "error"
+    }
+  ],
+  "flowTimeline": [
+    {
+      "type": "mensaje_usuario",
+      "timestamp": "2026-03-19T19:35:00.000Z",
+      "message": "Usuario solicita demo visual del flujo de orquestación ELROI para stakeholders."
+    },
+    {
+      "type": "decision_elroi",
+      "timestamp": "2026-03-19T19:36:00.000Z",
+      "message": "main decide delegar UI a dev, narrativa a content y setup operativo a ops."
+    },
+    {
+      "type": "tarea_delegada",
+      "timestamp": "2026-03-19T19:37:00.000Z",
+      "message": "dev implementa dashboard + timeline + panel actividad con datos mock locales."
+    },
+    {
+      "type": "tarea_delegada",
+      "timestamp": "2026-03-19T19:39:00.000Z",
+      "message": "content define textos UX de estado y etiquetas legibles para demo ejecutiva."
+    },
+    {
+      "type": "tarea_delegada",
+      "timestamp": "2026-03-19T19:40:00.000Z",
+      "message": "ops prepara script de share temporal para exponer la demo local."
+    },
+    {
+      "type": "resultado",
+      "timestamp": "2026-03-19T19:43:00.000Z",
+      "message": "Se valida demo funcional local con estructura MVP completa."
+    },
+    {
+      "type": "consolidacion_final",
+      "timestamp": "2026-03-19T19:44:00.000Z",
+      "message": "main consolida entregables: ruta, repo, comando de ejecución y share temporal."
+    }
+  ],
+  "activityPanel": [
+    {
+      "agent": "main",
+      "lastInteraction": "Consolidando respuesta final",
+      "timestamp": "2026-03-19T19:44:00.000Z",
+      "status": "running"
+    },
+    {
+      "agent": "content",
+      "lastInteraction": "Copy de tarjetas y timeline finalizado",
+      "timestamp": "2026-03-19T19:42:00.000Z",
+      "status": "success"
+    },
+    {
+      "agent": "ops",
+      "lastInteraction": "Script share.sh generado",
+      "timestamp": "2026-03-19T19:41:00.000Z",
+      "status": "success"
+    },
+    {
+      "agent": "dev",
+      "lastInteraction": "Refinando render de estados",
+      "timestamp": "2026-03-19T19:44:00.000Z",
+      "status": "running"
+    },
+    {
+      "agent": "office",
+      "lastInteraction": "README draft actualizado",
+      "timestamp": "2026-03-19T19:43:00.000Z",
+      "status": "success"
+    },
+    {
+      "agent": "agent-factory",
+      "lastInteraction": "Falló validación de plantilla experimental",
+      "timestamp": "2026-03-19T19:40:00.000Z",
+      "status": "error"
+    }
+  ]
+}

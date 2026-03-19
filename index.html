@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ELROI · Agentes Flow UI</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Agentes Flow UI</h1>
+        <p>Monitoreo visual de orquestación ELROI (MVP)</p>
+      </div>
+      <div id="last-refresh" class="chip">Cargando datos...</div>
+    </header>
+
+    <main class="layout">
+      <section class="panel">
+        <h2>Dashboard de agentes</h2>
+        <div id="agents-grid" class="agents-grid"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Flujo de delegación</h2>
+        <ol id="timeline" class="timeline"></ol>
+      </section>
+
+      <section class="panel">
+        <h2>Actividad reciente</h2>
+        <div id="activity-list" class="activity-list"></div>
+      </section>
+    </main>
+
+    <template id="agent-card-template">
+      <article class="agent-card">
+        <div class="card-head">
+          <h3 class="agent-name"></h3>
+          <span class="status-badge"></span>
+        </div>
+        <p class="agent-role"></p>
+        <div class="meta">
+          <strong>Skills:</strong>
+          <ul class="skills-list"></ul>
+        </div>
+        <div class="meta">
+          <strong>Tools:</strong>
+          <ul class="tools-list"></ul>
+        </div>
+      </article>
+    </template>
+
+    <template id="timeline-item-template">
+      <li class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-head">
+            <span class="timeline-type"></span>
+            <span class="timeline-time"></span>
+          </div>
+          <p class="timeline-text"></p>
+        </div>
+      </li>
+    </template>
+
+    <template id="activity-item-template">
+      <article class="activity-item">
+        <div>
+          <h3 class="activity-agent"></h3>
+          <p class="activity-last"></p>
+        </div>
+        <div class="activity-side">
+          <span class="activity-status"></span>
+          <time class="activity-relative"></time>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
