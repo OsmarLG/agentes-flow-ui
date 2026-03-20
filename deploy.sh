@@ -92,9 +92,6 @@ docker run -d \
   -e OPENCLAW_BIN="openclaw" \
   -e OPENCLAW_MJS="/usr/lib/node_modules/openclaw/openclaw.mjs" \
   -e OPENCLAW_HOME="/root/.openclaw" \
-  -e OPENCLAW_CONFIG="/root/.openclaw/openclaw.json" \
-  -e HOME="/root" \
-  -e XDG_CONFIG_HOME="/root/.openclaw/.config" \
   -v /usr/lib/node_modules/openclaw:/usr/lib/node_modules/openclaw:ro \
   -v /root/.openclaw:/root/.openclaw:ro \
   -l traefik.enable=true \

@@ -16,8 +16,6 @@ const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 30000);
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_MJS = process.env.OPENCLAW_MJS || '/usr/lib/node_modules/openclaw/openclaw.mjs';
 const OPENCLAW_HOME = process.env.OPENCLAW_HOME || '/root/.openclaw';
-const OPENCLAW_CONFIG = process.env.OPENCLAW_CONFIG || path.join(OPENCLAW_HOME, 'openclaw.json');
-const XDG_CONFIG_HOME = process.env.XDG_CONFIG_HOME || path.join(OPENCLAW_HOME, '.config');
 const HOME_DIR = process.env.HOME || '/root';
 const AUTH_API_URL = String(process.env.AUTH_API_URL || 'https://auth.openclaw.elroi.cloud').replace(/\/$/, '');
 const AUTH_LOGIN = process.env.AUTH_LOGIN || process.env.INITIAL_ADMIN_USERNAME || '';
@@ -131,10 +129,7 @@ async function listOpenClawAgents() {
 
   const cliEnv = {
     ...process.env,
-    OPENCLAW_HOME,
-    OPENCLAW_CONFIG,
-    XDG_CONFIG_HOME,
-    HOME: HOME_DIR
+    OPENCLAW_HOME
   };
 
   const failures = [];
