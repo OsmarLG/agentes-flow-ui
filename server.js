@@ -16,6 +16,9 @@ const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 30000);
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_MJS = process.env.OPENCLAW_MJS || '/usr/lib/node_modules/openclaw/openclaw.mjs';
 const OPENCLAW_HOME = process.env.OPENCLAW_HOME || '/root/.openclaw';
+const OPENCLAW_CONFIG = process.env.OPENCLAW_CONFIG || path.join(OPENCLAW_HOME, 'openclaw.json');
+const XDG_CONFIG_HOME = process.env.XDG_CONFIG_HOME || path.join(OPENCLAW_HOME, '.config');
+const HOME_DIR = process.env.HOME || '/root';
 const AUTH_API_URL = String(process.env.AUTH_API_URL || 'https://auth.openclaw.elroi.cloud').replace(/\/$/, '');
 const AUTH_LOGIN = process.env.AUTH_LOGIN || process.env.INITIAL_ADMIN_USERNAME || '';
 const AUTH_DEVICE_NAME = String(process.env.AUTH_DEVICE_NAME || 'agentes-flow-ui');
@@ -115,24 +118,33 @@ function buildFallbackTools(agent) {
 async function listOpenClawAgents() {
   const candidates = [
     {
-      bin: OPENCLAW_BIN,
-      args: ['agents', 'list', '--json'],
-      command: `${OPENCLAW_BIN} agents list --json`
-    },
-    {
       bin: 'node',
       args: [OPENCLAW_MJS, 'agents', 'list', '--json'],
       command: `node ${OPENCLAW_MJS} agents list --json`
+    },
+    {
+      bin: OPENCLAW_BIN,
+      args: ['agents', 'list', '--json'],
+      command: `${OPENCLAW_BIN} agents list --json`
     }
   ];
+
+  const cliEnv = {
+    ...process.env,
+    OPENCLAW_HOME,
+    OPENCLAW_CONFIG,
+    XDG_CONFIG_HOME,
+    HOME: HOME_DIR
+  };
 
   const failures = [];
 
   for (const candidate of candidates) {
     try {
       const cli = await execFileAsync(candidate.bin, candidate.args, {
-        timeout: 7000,
-        maxBuffer: 1024 * 1024 * 4
+        timeout: 15000,
+        maxBuffer: 1024 * 1024 * 4,
+        env: cliEnv
       });
       const listed = JSON.parse(cli.stdout || '[]');
       return {
@@ -152,7 +164,10 @@ async function listOpenClawAgents() {
         command: candidate.command,
         error: error?.message || 'openclaw agents list failed',
         code: error?.code || null,
-        stderr: error?.stderr ? String(error.stderr).slice(0, 600) : ''
+        exitCode: typeof error?.code === 'number' ? error.code : null,
+        signal: error?.signal || null,
+        stderr: error?.stderr ? String(error.stderr).slice(0, 1200) : '',
+        stdout: error?.stdout ? String(error.stdout).slice(0, 1200) : ''
       });
     }
   }
