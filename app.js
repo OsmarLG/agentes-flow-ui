@@ -67,11 +67,17 @@ function normalizeStatus(status) {
 }
 
 function sourceClass(source) {
-  return source === 'real' ? 'source-real' : source === 'mixed' ? 'source-mixed' : 'source-fallback';
+  if (source === 'real') return 'source-real';
+  if (source === 'mixed') return 'source-mixed';
+  if (source === 'unavailable') return 'source-unavailable';
+  return 'source-fallback';
 }
 
 function sourceLabel(source) {
-  return source === 'real' ? 'REAL' : source === 'mixed' ? 'MIXED' : 'FALLBACK';
+  if (source === 'real') return 'REAL (OpenClaw)';
+  if (source === 'mixed') return 'MIXTO (real + fallback)';
+  if (source === 'unavailable') return 'SIN DATOS REALES';
+  return 'FALLBACK (mock)';
 }
 
 function isDevMode() {
@@ -108,9 +114,11 @@ function setLoginFeedback({ loading = false, status = '', error = '' } = {}) {
   const statusEl = document.getElementById('login-status');
   const errorEl = document.getElementById('login-error');
   const passwordInput = document.getElementById('login-password');
+  const identifierInput = document.getElementById('login-identifier');
 
   submitBtn.disabled = loading;
   passwordInput.disabled = loading;
+  identifierInput.disabled = loading;
   submitBtn.textContent = loading ? 'Validando…' : 'Entrar';
   statusEl.textContent = status;
   statusEl.classList.toggle('loading', loading);
@@ -368,7 +376,9 @@ function renderGeneralActivity(activityData) {
           (item) => `<li><span class="activity-meta">${new Date(item.timestamp).toLocaleString('es-ES')} · ${sourceLabel(item.source)}</span><span>${item.agent ? `[${item.agent}] ` : ''}${item.message}</span></li>`
         )
         .join('')
-    : '<li>Sin actividad reciente.</li>';
+    : source === 'unavailable'
+      ? '<li>Sin actividad real disponible.</li>'
+      : '<li>Sin actividad reciente.</li>';
 }
 
 function renderPerAgentActivity(activityData) {
@@ -546,6 +556,7 @@ async function checkSession() {
 function setupAuth() {
   const form = document.getElementById('login-form');
   const input = document.getElementById('login-password');
+  const identifierInput = document.getElementById('login-identifier');
   const logoutBtn = document.getElementById('logout-btn');
 
   form.addEventListener('submit', async (event) => {
@@ -553,11 +564,12 @@ function setupAuth() {
     setLoginFeedback({ loading: true, status: 'Validando acceso…', error: '' });
 
     try {
+      const login = identifierInput.value.trim();
       const password = input.value;
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ login, password })
       });
 
       const payload = await response.json().catch(() => ({}));
@@ -568,6 +580,7 @@ function setupAuth() {
 
       setAuthToken(payload.token);
       input.value = '';
+      identifierInput.value = '';
       setLoginFeedback({ status: 'Acceso concedido. Cargando dashboard…' });
       setAuthenticatedUI(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });

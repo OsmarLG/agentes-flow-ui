@@ -12,7 +12,9 @@
     <section id="login-screen" class="login-screen">
       <form id="login-form" class="login-card">
         <h1>Agentes Flow UI</h1>
-        <p>Acceso protegido. Ingresa la contraseña del dashboard.</p>
+        <p>Acceso protegido. Ingresa usuario/email y contraseña.</p>
+        <label for="login-identifier">Usuario o email</label>
+        <input id="login-identifier" type="text" required autocomplete="username" />
         <label for="login-password">Contraseña</label>
         <input id="login-password" type="password" required autocomplete="current-password" />
         <button id="login-submit" type="submit">Entrar</button>

@@ -16,7 +16,7 @@ const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 5000);
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_HOME = process.env.OPENCLAW_HOME || '/root/.openclaw';
 const AUTH_API_URL = String(process.env.AUTH_API_URL || 'https://auth.openclaw.elroi.cloud').replace(/\/$/, '');
-const AUTH_LOGIN = String(process.env.AUTH_LOGIN || process.env.INITIAL_ADMIN_USERNAME || 'admin');
+const AUTH_LOGIN = process.env.AUTH_LOGIN || process.env.INITIAL_ADMIN_USERNAME || '';
 const AUTH_DEVICE_NAME = String(process.env.AUTH_DEVICE_NAME || 'agentes-flow-ui');
 const AUTH_TOKEN_TTL_MS = Number(process.env.AUTH_TOKEN_TTL_MS || 1000 * 60 * 60 * 8);
 
@@ -185,33 +185,6 @@ function extractAgentIdFromSessionKey(sessionKey = '') {
   return normalizeId(parts[1]);
 }
 
-function fallbackActivityFromMock(mock, agents, limitPerAgent) {
-  const general = (mock.flowTimeline || []).slice(-8).reverse().map((ev) => ({
-    timestamp: ev.timestamp,
-    message: ev.message,
-    source: 'fallback'
-  }));
-
-  const byAgent = {};
-  for (const agent of agents) {
-    byAgent[agent.id] = (mock.activityPanel || [])
-      .filter((entry) => entry.agent === agent.id)
-      .slice(0, limitPerAgent)
-      .map((entry) => ({
-        timestamp: entry.timestamp,
-        message: entry.lastInteraction,
-        status: entry.status,
-        source: 'fallback'
-      }));
-  }
-
-  return {
-    general,
-    byAgent,
-    sourceSummary: { general: 'fallback', byAgent: 'fallback' }
-  };
-}
-
 async function readRecentSessionActivity(limitPerAgent = 5) {
   const resultByAgent = {};
   const general = [];
@@ -299,44 +272,33 @@ async function readConfigAuditEvents(limit = 6) {
 }
 
 async function loadActivityPayload(limitPerAgent = 5) {
-  const [mock, agentsPayload, sessionsActivity, configEvents] = await Promise.all([
-    readMockData(),
+  const [agentsPayload, sessionsActivity, configEvents] = await Promise.all([
     loadAgentsPayload(),
     readRecentSessionActivity(limitPerAgent),
     readConfigAuditEvents()
   ]);
 
   const agents = agentsPayload.agents || [];
-  const fallback = fallbackActivityFromMock(mock, agents, limitPerAgent);
-
   const general = [...sessionsActivity.general, ...configEvents]
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .slice(0, 20);
 
   const byAgent = {};
   for (const agent of agents) {
-    const realEvents = (sessionsActivity.byAgent[agent.id] || []).slice(0, limitPerAgent);
-    const fallbackEvents = (fallback.byAgent[agent.id] || []).slice(0, Math.max(0, limitPerAgent - realEvents.length));
-    byAgent[agent.id] = [...realEvents, ...fallbackEvents].slice(0, limitPerAgent);
+    byAgent[agent.id] = (sessionsActivity.byAgent[agent.id] || []).slice(0, limitPerAgent);
   }
 
-  const mergedGeneral = general.length
-    ? [...general, ...fallback.general.slice(0, Math.max(0, 8 - general.length))].slice(0, 20)
-    : fallback.general;
-
-  const generalSource = general.length ? (mergedGeneral.some((e) => e.source === 'fallback') ? 'mixed' : 'real') : 'fallback';
-  const hasRealByAgent = Object.values(byAgent).some((events) => events.some((e) => e.source === 'real'));
-  const hasFallbackByAgent = Object.values(byAgent).some((events) => events.some((e) => e.source === 'fallback'));
-  const byAgentSource = hasRealByAgent && hasFallbackByAgent ? 'mixed' : hasRealByAgent ? 'real' : 'fallback';
+  const hasGeneralReal = general.length > 0;
+  const hasByAgentReal = Object.values(byAgent).some((events) => events.length > 0);
 
   return {
     generatedAt: new Date().toISOString(),
     pollIntervalMs: POLL_INTERVAL_MS,
     sourceSummary: {
-      general: generalSource,
-      byAgent: byAgentSource
+      general: hasGeneralReal ? 'real' : 'unavailable',
+      byAgent: hasByAgentReal ? 'real' : 'unavailable'
     },
-    general: mergedGeneral,
+    general,
     byAgent,
     limitPerAgent
   };
@@ -349,15 +311,20 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString(), pollIntervalMs: POLL_INTERVAL_MS });
 });
 
-async function verifyAgainstAuthApi(password) {
+async function verifyAgainstAuthApi(login, password) {
   if (!AUTH_API_URL) return { ok: false, reason: 'AUTH_API_URL no configurada' };
+
+  const resolvedLogin = String(login || AUTH_LOGIN || '').trim();
+  if (!resolvedLogin || !password) {
+    return { ok: false, reason: 'login/password requeridos' };
+  }
 
   try {
     const response = await fetch(`${AUTH_API_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
-        login: AUTH_LOGIN,
+        login: resolvedLogin,
         password,
         device_name: AUTH_DEVICE_NAME
       })
@@ -376,9 +343,9 @@ async function verifyAgainstAuthApi(password) {
 }
 
 app.post('/api/login', async (req, res) => {
-  const { password } = req.body || {};
+  const { login, password } = req.body || {};
 
-  const authApiCheck = await verifyAgainstAuthApi(password);
+  const authApiCheck = await verifyAgainstAuthApi(login, password);
 
   if (!authApiCheck.ok) {
     return res.status(401).json({ ok: false, error: 'Credenciales inválidas', details: authApiCheck.reason });
