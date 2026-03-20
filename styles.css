@@ -107,6 +107,16 @@ body.auth-ready #app-shell {
 
 .login-error { color: #fca5a5 !important; }
 
+.app-notice {
+  margin: 1rem 1.6rem 0;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;

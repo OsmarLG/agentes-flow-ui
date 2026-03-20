@@ -54,6 +54,21 @@ let pollIntervalMs = DEFAULT_POLL_INTERVAL_MS;
 let firstRender = true;
 let authToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
 
+function setAppNotice(message = '') {
+  const notice = document.getElementById('app-notice');
+  if (!notice) return;
+  notice.hidden = !message;
+  notice.textContent = message;
+}
+
+function redirectToLogin(message = 'Tu sesión expiró. Vuelve a iniciar sesión.') {
+  clearTimeout(pollTimer);
+  setAuthToken('');
+  setAuthenticatedUI(false);
+  setAppNotice(message);
+  setLoginFeedback({ error: message, status: '' });
+}
+
 const interactionDiagnostics = {
   nodeClicksBound: false,
   controlsBound: false,
@@ -135,13 +150,15 @@ function setAuthToken(token) {
 }
 
 async function apiFetch(url, options = {}) {
-  const headers = { ...(options.headers || {}) };
+  const latestStoredToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  if (!authToken && latestStoredToken) authToken = latestStoredToken;
+
+  const headers = { Accept: 'application/json', ...(options.headers || {}) };
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
   const response = await fetch(url, { ...options, headers, cache: 'no-store' });
 
   if (response.status === 401) {
-    setAuthToken('');
-    setAuthenticatedUI(false);
+    redirectToLogin('Sesión expirada o no autorizada. Inicia sesión para continuar.');
     throw new Error('No autenticado');
   }
 
@@ -536,7 +553,12 @@ async function refreshData() {
     updateRefreshChip({ ok: true, generatedAt: data.generatedAt });
   } catch (error) {
     console.error(error);
+    if (String(error?.message || '').toLowerCase().includes('no autenticado')) {
+      updateRefreshChip({ ok: false, message: 'sesión expirada' });
+      return;
+    }
     updateRefreshChip({ ok: false, message: 'stale/offline · API no disponible' });
+    setAppNotice('No se pudo actualizar el dashboard. Revisa conexión/API e intenta de nuevo.');
   } finally {
     clearTimeout(pollTimer);
     if (authToken) pollTimer = setTimeout(refreshData, pollIntervalMs || DEFAULT_POLL_INTERVAL_MS);
@@ -581,6 +603,7 @@ function setupAuth() {
       setAuthToken(payload.token);
       input.value = '';
       identifierInput.value = '';
+      setAppNotice('');
       setLoginFeedback({ status: 'Acceso concedido. Cargando dashboard…' });
       setAuthenticatedUI(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -603,7 +626,8 @@ function setupAuth() {
     clearTimeout(pollTimer);
     setAuthToken('');
     setAuthenticatedUI(false);
-    setLoginFeedback({ status: '' });
+    setAppNotice('');
+    setLoginFeedback({ status: 'Sesión cerrada.' });
     window.scrollTo({ top: 0, behavior: 'auto' });
   });
 }
@@ -621,7 +645,12 @@ async function init() {
 
   const authed = await checkSession();
   setAuthenticatedUI(authed);
-  if (authed) await refreshData();
+  if (authed) {
+    setAppNotice('');
+    await refreshData();
+  } else {
+    setLoginFeedback({ status: 'Inicia sesión para ver el dashboard en vivo.' });
+  }
 }
 
 init();
