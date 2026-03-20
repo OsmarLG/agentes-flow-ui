@@ -36,7 +36,9 @@ const ID_ALIAS = {
   'elroi-content': 'content',
   'elroi-ops': 'ops',
   'elroi-office': 'office',
-  'elroi-agent-factory': 'agent-factory'
+  'elroi-agent-factory': 'agent-factory',
+  'elroi-research': 'elroi-research',
+  research: 'elroi-research'
 };
 
 function loadEnvFile(filePath) {

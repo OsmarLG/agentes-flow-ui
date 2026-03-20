@@ -48,6 +48,14 @@
       "keySkills": ["agent templates", "policy alignment", "skills design"],
       "keyTools": ["write", "edit", "exec"],
       "status": "ok"
+    },
+    {
+      "id": "elroi-research",
+      "name": "elroi-research",
+      "role": "Investigación técnica, benchmark y síntesis de hallazgos",
+      "keySkills": ["investigation", "comparative analysis", "insights"],
+      "keyTools": ["web_search", "web_fetch", "read"],
+      "status": "ok"
     }
   ],
   "flowTimeline": [
@@ -69,6 +77,11 @@
     {
       "type": "delegacion",
       "timestamp": "2026-03-19T20:48:00.000Z",
+      "message": "elroi-research consolida benchmark UX para guiar ajustes de layout y navegación."
+    },
+    {
+      "type": "delegacion",
+      "timestamp": "2026-03-19T20:48:30.000Z",
       "message": "content optimiza etiquetas UX para lectura ejecutiva en una sola pantalla."
     },
     {
@@ -117,6 +130,12 @@
       "agent": "agent-factory",
       "lastInteraction": "Plantillas estables en modo demo (sin incidentes)",
       "timestamp": "2026-03-19T20:50:00.000Z",
+      "status": "ok"
+    },
+    {
+      "agent": "elroi-research",
+      "lastInteraction": "Síntesis de hallazgos para alimentar decisiones de main/dev/content",
+      "timestamp": "2026-03-19T20:53:00.000Z",
       "status": "ok"
     }
   ]

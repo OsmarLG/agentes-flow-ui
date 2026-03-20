@@ -256,8 +256,8 @@ body.auth-ready #app-shell {
 .graph-viewport {
   position: absolute;
   inset: 0;
-  width: 1200px;
-  height: 820px;
+  width: 1320px;
+  height: 920px;
   transform-origin: 0 0;
   will-change: transform;
 }
@@ -266,6 +266,27 @@ body.auth-ready #app-shell {
 .nodes-layer {
   position: absolute;
   inset: 0;
+}
+
+.flow-links {
+  pointer-events: none;
+}
+
+.binding-diagnostics {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  z-index: 13;
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  font-size: 0.68rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.45rem;
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(2, 6, 23, 0.78);
+  pointer-events: none;
 }
 
 .graph-link {

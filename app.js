@@ -6,22 +6,24 @@ const STATUS_CLASS = {
 };
 
 const CANVAS_SIZE = {
-  width: 1200,
-  height: 820
+  width: 1320,
+  height: 920
 };
 
 const NODE_LAYOUT = {
-  main: { x: 552, y: 70 },
-  dev: { x: 210, y: 265 },
-  content: { x: 865, y: 265 },
-  ops: { x: 552, y: 450 },
-  office: { x: 210, y: 645 },
-  'agent-factory': { x: 865, y: 645 }
+  main: { x: 550, y: 72 },
+  'elroi-research': { x: 550, y: 228 },
+  dev: { x: 225, y: 390 },
+  content: { x: 875, y: 390 },
+  ops: { x: 550, y: 548 },
+  office: { x: 225, y: 706 },
+  'agent-factory': { x: 875, y: 706 }
 };
 
 const GRAPH_EDGES = [
-  ['main', 'dev'],
-  ['main', 'content'],
+  ['main', 'elroi-research'],
+  ['elroi-research', 'dev'],
+  ['elroi-research', 'content'],
   ['main', 'ops'],
   ['ops', 'office'],
   ['dev', 'agent-factory'],
@@ -52,6 +54,14 @@ let pollIntervalMs = DEFAULT_POLL_INTERVAL_MS;
 let firstRender = true;
 let authToken = localStorage.getItem(AUTH_TOKEN_KEY) || '';
 
+const interactionDiagnostics = {
+  nodeClicksBound: false,
+  controlsBound: false,
+  lastNodeClick: '-',
+  zoomScale: 1,
+  gestureState: 'idle'
+};
+
 function normalizeStatus(status) {
   return STATUS_CLASS[status] || 'running';
 }
@@ -62,6 +72,26 @@ function sourceClass(source) {
 
 function sourceLabel(source) {
   return source === 'real' ? 'REAL' : source === 'mixed' ? 'MIXED' : 'FALLBACK';
+}
+
+function isDevMode() {
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || new URLSearchParams(window.location.search).has('dev');
+}
+
+function renderDiagnostics() {
+  const panel = document.getElementById('binding-diagnostics');
+  if (!panel) return;
+
+  panel.hidden = !isDevMode();
+  panel.innerHTML = `
+    <strong>Diag:</strong>
+    <span>nodes:${interactionDiagnostics.nodeClicksBound ? 'ok' : 'off'}</span>
+    <span>controls:${interactionDiagnostics.controlsBound ? 'ok' : 'off'}</span>
+    <span>zoom:${interactionDiagnostics.zoomScale.toFixed(2)}x</span>
+    <span>gesture:${interactionDiagnostics.gestureState}</span>
+    <span>last:${interactionDiagnostics.lastNodeClick}</span>
+  `;
 }
 
 function setAuthenticatedUI(isAuthed) {
@@ -120,6 +150,8 @@ function createToolBadge(tool) {
 function applyViewTransform() {
   const viewport = document.getElementById('graph-viewport');
   viewport.style.transform = `translate(${viewState.x}px, ${viewState.y}px) scale(${viewState.scale})`;
+  interactionDiagnostics.zoomScale = viewState.scale;
+  renderDiagnostics();
 }
 
 function getDistance(a, b) {
@@ -190,6 +222,11 @@ function fitGraphToStage() {
   viewState.x = stage.clientWidth / 2 - graphCenterX * targetScale;
   viewState.y = stage.clientHeight / 2 - graphCenterY * targetScale;
   applyViewTransform();
+}
+
+function resolveEdges(agents = []) {
+  const ids = new Set((agents || []).map((agent) => agent.id));
+  return GRAPH_EDGES.filter(([from, to]) => ids.has(from) && ids.has(to));
 }
 
 function drawLinks(edges) {
@@ -271,6 +308,9 @@ function renderGraph(data, activityData, { fit = false } = {}) {
   const tpl = document.getElementById('graph-node-template');
   layer.innerHTML = '';
 
+  const edges = resolveEdges(data.agents || []);
+  interactionDiagnostics.nodeClicksBound = false;
+
   data.agents.forEach((agent) => {
     const node = tpl.content.firstElementChild.cloneNode(true);
     const status = normalizeStatus(agent.status);
@@ -288,16 +328,19 @@ function renderGraph(data, activityData, { fit = false } = {}) {
 
     node.addEventListener('click', () => {
       selectedAgentId = agent.id;
+      interactionDiagnostics.lastNodeClick = agent.id;
       layer.querySelectorAll('.graph-node').forEach((el) => el.classList.remove('active'));
       node.classList.add('active');
       renderDetail(agent, data, activityData);
+      renderDiagnostics();
     });
 
+    interactionDiagnostics.nodeClicksBound = true;
     layer.appendChild(node);
   });
 
   requestAnimationFrame(() => {
-    drawLinks(GRAPH_EDGES);
+    drawLinks(edges);
     if (fit) fitGraphToStage();
     if (selectedAgentId) {
       const activeNode = layer.querySelector(`.graph-node[data-id="${selectedAgentId}"]`);
@@ -377,11 +420,19 @@ function setupInteractions() {
   }, { passive: false });
 
   stage.addEventListener('pointerdown', (event) => {
+    const isInteractiveTarget = Boolean(event.target.closest('.graph-node, .graph-controls, .zoom-btn'));
+    if (isInteractiveTarget) {
+      interactionDiagnostics.gestureState = 'node/control interaction';
+      renderDiagnostics();
+      return;
+    }
+
     stage.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
-    if (pointers.size === 1 && !event.target.closest('.graph-node')) {
+    if (pointers.size === 1) {
       dragState = { startX: event.clientX, startY: event.clientY, originX: viewState.x, originY: viewState.y };
+      interactionDiagnostics.gestureState = 'drag';
     }
 
     if (pointers.size === 2) {
@@ -392,7 +443,9 @@ function setupInteractions() {
         midpoint: stagePointFromClient((a.x + b.x) / 2, (a.y + b.y) / 2)
       };
       dragState = null;
+      interactionDiagnostics.gestureState = 'pinch';
     }
+    renderDiagnostics();
   });
 
   stage.addEventListener('pointermove', (event) => {
@@ -417,16 +470,36 @@ function setupInteractions() {
   const endPointer = (event) => {
     pointers.delete(event.pointerId);
     if (pointers.size < 2) pinchState = null;
-    if (pointers.size === 0) dragState = null;
+    if (pointers.size === 0) {
+      dragState = null;
+      interactionDiagnostics.gestureState = 'idle';
+      renderDiagnostics();
+    }
   };
 
   stage.addEventListener('pointerup', endPointer);
   stage.addEventListener('pointercancel', endPointer);
   stage.addEventListener('pointerleave', endPointer);
 
-  zoomInBtn.addEventListener('click', () => setZoomAtPoint(viewState.scale * 1.18, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 }));
-  zoomOutBtn.addEventListener('click', () => setZoomAtPoint(viewState.scale / 1.18, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 }));
-  zoomResetBtn.addEventListener('click', () => fitGraphToStage());
+  [zoomInBtn, zoomOutBtn, zoomResetBtn].forEach((btn) => {
+    btn.addEventListener('pointerdown', (event) => event.stopPropagation());
+  });
+
+  zoomInBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setZoomAtPoint(viewState.scale * 1.18, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 });
+  });
+  zoomOutBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setZoomAtPoint(viewState.scale / 1.18, { x: stage.clientWidth / 2, y: stage.clientHeight / 2 });
+  });
+  zoomResetBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    fitGraphToStage();
+  });
+
+  interactionDiagnostics.controlsBound = true;
+  renderDiagnostics();
 }
 
 async function loadAgents() {
@@ -526,9 +599,10 @@ async function init() {
   setAuthenticatedUI(false);
   setupInteractions();
   setupAuth();
+  renderDiagnostics();
 
   window.addEventListener('resize', () => {
-    drawLinks(GRAPH_EDGES);
+    drawLinks(resolveEdges(currentData?.agents || []));
     if (firstRender) fitGraphToStage();
   });
 
