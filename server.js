@@ -119,7 +119,9 @@ async function listOpenClawAgents() {
     });
     const listed = JSON.parse(cli.stdout || '[]');
     return {
+      ok: true,
       source: 'real',
+      command: `${OPENCLAW_BIN} agents list --json`,
       agents: listed.map((raw) => ({
         id: normalizeId(raw.id || raw.name || raw.identityName || 'agent'),
         sourceId: raw.id,
@@ -128,13 +130,28 @@ async function listOpenClawAgents() {
         raw
       }))
     };
-  } catch {
-    return { source: 'fallback', agents: [] };
+  } catch (error) {
+    return {
+      ok: false,
+      source: 'unavailable',
+      command: `${OPENCLAW_BIN} agents list --json`,
+      error: error?.message || 'openclaw agents list failed',
+      code: error?.code || null,
+      stderr: error?.stderr ? String(error.stderr).slice(0, 600) : ''
+    };
   }
 }
 
 async function loadAgentsPayload() {
   const listedResult = await listOpenClawAgents();
+
+  if (!listedResult.ok) {
+    const err = new Error(`No se pudo ejecutar ${listedResult.command}: ${listedResult.error}`);
+    err.code = 'OPENCLAW_SOURCE_UNAVAILABLE';
+    err.details = listedResult;
+    throw err;
+  }
+
   const listed = listedResult.agents;
 
   const agents = listed.map((item) => ({
@@ -160,6 +177,11 @@ async function loadAgentsPayload() {
     generatedAt: new Date().toISOString(),
     pollIntervalMs: POLL_INTERVAL_MS,
     source: 'openclaw agents list --json',
+    sourceStatus: {
+      type: 'openclaw-cli',
+      ok: true,
+      command: listedResult.command
+    },
     agents: agents.map(({ _sourceId, ...agent }) => agent),
     flowTimeline: [],
     activityPanel
@@ -371,7 +393,9 @@ app.get('/api/agents', requireAuth, async (_req, res) => {
     res.status(503).json({
       ok: false,
       error: 'No se pudo leer openclaw agents list --json',
+      reason: error.code || 'OPENCLAW_SOURCE_UNAVAILABLE',
       details: error.message,
+      sourceStatus: error.details || null,
       timestamp: new Date().toISOString()
     });
   }

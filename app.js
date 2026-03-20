@@ -17,7 +17,8 @@ const NODE_LAYOUT = {
   content: { x: 875, y: 390 },
   ops: { x: 550, y: 548 },
   office: { x: 225, y: 706 },
-  'agent-factory': { x: 875, y: 706 }
+  'agent-factory': { x: 875, y: 706 },
+  'elroi-automate': { x: 550, y: 706 }
 };
 
 const GRAPH_EDGES = [
@@ -529,15 +530,25 @@ function setupInteractions() {
   renderDiagnostics();
 }
 
+async function parseApiError(response, fallbackMessage) {
+  const payload = await response.json().catch(() => null);
+  if (payload?.error || payload?.details) {
+    const reason = payload.reason ? ` (${payload.reason})` : '';
+    const details = payload.details ? ` · ${payload.details}` : '';
+    return new Error(`${payload.error || fallbackMessage}${reason}${details}`);
+  }
+  return new Error(`${fallbackMessage} (${response.status})`);
+}
+
 async function loadAgents() {
   const response = await apiFetch('/api/agents');
-  if (!response.ok) throw new Error(`API /api/agents respondió ${response.status}`);
+  if (!response.ok) throw await parseApiError(response, 'API /api/agents no disponible');
   return response.json();
 }
 
 async function loadActivity() {
   const response = await apiFetch('/api/activity?limitPerAgent=5');
-  if (!response.ok) throw new Error(`API /api/activity respondió ${response.status}`);
+  if (!response.ok) throw await parseApiError(response, 'API /api/activity no disponible');
   return response.json();
 }
 
@@ -551,14 +562,25 @@ async function refreshData() {
     renderPerAgentActivity(activityData);
     firstRender = false;
     updateRefreshChip({ ok: true, generatedAt: data.generatedAt });
+
+    if (!Array.isArray(data.agents) || data.agents.length === 0) {
+      setAppNotice('No hay agentes para mostrar. Verifica la fuente OpenClaw (agents list --json), auth y configuración del servidor.');
+    } else {
+      setAppNotice('');
+    }
   } catch (error) {
     console.error(error);
-    if (String(error?.message || '').toLowerCase().includes('no autenticado')) {
+    const message = String(error?.message || '');
+    if (message.toLowerCase().includes('no autenticado')) {
       updateRefreshChip({ ok: false, message: 'sesión expirada' });
       return;
     }
     updateRefreshChip({ ok: false, message: 'stale/offline · API no disponible' });
-    setAppNotice('No se pudo actualizar el dashboard. Revisa conexión/API e intenta de nuevo.');
+    if (message.includes('OPENCLAW_SOURCE_UNAVAILABLE')) {
+      setAppNotice('Sin datos reales: falló la fuente OpenClaw en backend (openclaw agents list --json). Revisa PATH/permisos/configuración del servicio.');
+    } else {
+      setAppNotice(`No se pudo actualizar el dashboard: ${message || 'error desconocido'}`);
+    }
   } finally {
     clearTimeout(pollTimer);
     if (authToken) pollTimer = setTimeout(refreshData, pollIntervalMs || DEFAULT_POLL_INTERVAL_MS);
