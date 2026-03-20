@@ -14,6 +14,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 30000);
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
+const OPENCLAW_MJS = process.env.OPENCLAW_MJS || '/usr/lib/node_modules/openclaw/openclaw.mjs';
 const OPENCLAW_HOME = process.env.OPENCLAW_HOME || '/root/.openclaw';
 const AUTH_API_URL = String(process.env.AUTH_API_URL || 'https://auth.openclaw.elroi.cloud').replace(/\/$/, '');
 const AUTH_LOGIN = process.env.AUTH_LOGIN || process.env.INITIAL_ADMIN_USERNAME || '';
@@ -112,34 +113,59 @@ function buildFallbackTools(agent) {
 }
 
 async function listOpenClawAgents() {
-  try {
-    const cli = await execFileAsync(OPENCLAW_BIN, ['agents', 'list', '--json'], {
-      timeout: 7000,
-      maxBuffer: 1024 * 1024 * 4
-    });
-    const listed = JSON.parse(cli.stdout || '[]');
-    return {
-      ok: true,
-      source: 'real',
-      command: `${OPENCLAW_BIN} agents list --json`,
-      agents: listed.map((raw) => ({
-        id: normalizeId(raw.id || raw.name || raw.identityName || 'agent'),
-        sourceId: raw.id,
-        name: raw.identityName || raw.name || raw.id,
-        status: pickStatus(raw),
-        raw
-      }))
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      source: 'unavailable',
-      command: `${OPENCLAW_BIN} agents list --json`,
-      error: error?.message || 'openclaw agents list failed',
-      code: error?.code || null,
-      stderr: error?.stderr ? String(error.stderr).slice(0, 600) : ''
-    };
+  const candidates = [
+    {
+      bin: OPENCLAW_BIN,
+      args: ['agents', 'list', '--json'],
+      command: `${OPENCLAW_BIN} agents list --json`
+    },
+    {
+      bin: 'node',
+      args: [OPENCLAW_MJS, 'agents', 'list', '--json'],
+      command: `node ${OPENCLAW_MJS} agents list --json`
+    }
+  ];
+
+  const failures = [];
+
+  for (const candidate of candidates) {
+    try {
+      const cli = await execFileAsync(candidate.bin, candidate.args, {
+        timeout: 7000,
+        maxBuffer: 1024 * 1024 * 4
+      });
+      const listed = JSON.parse(cli.stdout || '[]');
+      return {
+        ok: true,
+        source: 'real',
+        command: candidate.command,
+        agents: listed.map((raw) => ({
+          id: normalizeId(raw.id || raw.name || raw.identityName || 'agent'),
+          sourceId: raw.id,
+          name: raw.identityName || raw.name || raw.id,
+          status: pickStatus(raw),
+          raw
+        }))
+      };
+    } catch (error) {
+      failures.push({
+        command: candidate.command,
+        error: error?.message || 'openclaw agents list failed',
+        code: error?.code || null,
+        stderr: error?.stderr ? String(error.stderr).slice(0, 600) : ''
+      });
+    }
   }
+
+  return {
+    ok: false,
+    source: 'unavailable',
+    command: failures[0]?.command || `${OPENCLAW_BIN} agents list --json`,
+    error: failures[0]?.error || 'openclaw agents list failed',
+    code: failures[0]?.code || null,
+    stderr: failures[0]?.stderr || '',
+    attempts: failures
+  };
 }
 
 async function loadAgentsPayload() {

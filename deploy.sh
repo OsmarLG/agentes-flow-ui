@@ -89,7 +89,9 @@ docker run -d \
   -e POLL_INTERVAL_MS=5000 \
   -e DASH_PASSWORD="${FLOW_UI_DASH_PASSWORD:-change-me}" \
   -e AUTH_API_URL="https://auth.openclaw.elroi.cloud" \
-  -e OPENCLAW_BIN="/usr/lib/node_modules/openclaw/openclaw.mjs" \
+  -e OPENCLAW_BIN="openclaw" \
+  -e OPENCLAW_MJS="/usr/lib/node_modules/openclaw/openclaw.mjs" \
+  -v /usr/bin/openclaw:/usr/bin/openclaw:ro \
   -v /usr/lib/node_modules/openclaw:/usr/lib/node_modules/openclaw:ro \
   -v /root/.openclaw:/root/.openclaw:ro \
   -l traefik.enable=true \
