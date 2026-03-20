@@ -13,6 +13,8 @@
 
 * { box-sizing: border-box; }
 
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -20,11 +22,30 @@ body {
   background: radial-gradient(circle at top right, #1e293b, var(--bg));
 }
 
+body.auth-locked {
+  overflow: hidden;
+}
+
 .login-screen {
-  min-height: 100vh;
+  position: fixed;
+  inset: 0;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 1rem;
+  background: radial-gradient(circle at top right, #1e293b, #0b1220 65%);
+  z-index: 1000;
+}
+
+#app-shell {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+body.auth-ready #app-shell {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .login-card {
@@ -56,7 +77,35 @@ body {
   cursor: pointer;
 }
 
-.login-error { min-height: 1.1rem; color: #fca5a5 !important; }
+.login-card button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.login-status,
+.login-error {
+  min-height: 1.1rem;
+  font-size: 0.92rem;
+}
+
+.login-status {
+  color: #93c5fd;
+}
+
+.login-status.loading::before {
+  content: '';
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid rgba(147, 197, 253, 0.35);
+  border-top-color: #93c5fd;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 0.45rem;
+  vertical-align: -0.1rem;
+  animation: spin 0.8s linear infinite;
+}
+
+.login-error { color: #fca5a5 !important; }
 
 .topbar {
   display: flex;
@@ -375,6 +424,10 @@ body {
 
 @keyframes dash {
   to { stroke-dashoffset: -20; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes sweep {

@@ -65,8 +65,26 @@ function sourceLabel(source) {
 }
 
 function setAuthenticatedUI(isAuthed) {
-  document.getElementById('login-screen').hidden = isAuthed;
-  document.getElementById('app-shell').hidden = !isAuthed;
+  const loginScreen = document.getElementById('login-screen');
+  const appShell = document.getElementById('app-shell');
+  loginScreen.hidden = isAuthed;
+  appShell.hidden = !isAuthed;
+  document.body.classList.toggle('auth-locked', !isAuthed);
+  document.body.classList.toggle('auth-ready', isAuthed);
+}
+
+function setLoginFeedback({ loading = false, status = '', error = '' } = {}) {
+  const submitBtn = document.getElementById('login-submit');
+  const statusEl = document.getElementById('login-status');
+  const errorEl = document.getElementById('login-error');
+  const passwordInput = document.getElementById('login-password');
+
+  submitBtn.disabled = loading;
+  passwordInput.disabled = loading;
+  submitBtn.textContent = loading ? 'Validando…' : 'Entrar';
+  statusEl.textContent = status;
+  statusEl.classList.toggle('loading', loading);
+  errorEl.textContent = error;
 }
 
 function setAuthToken(token) {
@@ -455,30 +473,39 @@ async function checkSession() {
 function setupAuth() {
   const form = document.getElementById('login-form');
   const input = document.getElementById('login-password');
-  const errorEl = document.getElementById('login-error');
   const logoutBtn = document.getElementById('logout-btn');
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    errorEl.textContent = '';
+    setLoginFeedback({ loading: true, status: 'Validando acceso…', error: '' });
 
-    const password = input.value;
-    const response = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
-    });
+    try {
+      const password = input.value;
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.token) {
-      errorEl.textContent = payload.error || 'No fue posible iniciar sesión';
-      return;
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.token) {
+        setLoginFeedback({ error: payload.error || 'Contraseña incorrecta o sesión no válida' });
+        return;
+      }
+
+      setAuthToken(payload.token);
+      input.value = '';
+      setLoginFeedback({ status: 'Acceso concedido. Cargando dashboard…' });
+      setAuthenticatedUI(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      await refreshData();
+      setLoginFeedback();
+    } catch {
+      setLoginFeedback({ error: 'No fue posible iniciar sesión. Intenta de nuevo.' });
+    } finally {
+      const stillOnLogin = !authToken;
+      if (stillOnLogin) setLoginFeedback({});
     }
-
-    setAuthToken(payload.token);
-    input.value = '';
-    setAuthenticatedUI(true);
-    await refreshData();
   });
 
   logoutBtn.addEventListener('click', async () => {
@@ -490,10 +517,13 @@ function setupAuth() {
     clearTimeout(pollTimer);
     setAuthToken('');
     setAuthenticatedUI(false);
+    setLoginFeedback({ status: '' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
   });
 }
 
 async function init() {
+  setAuthenticatedUI(false);
   setupInteractions();
   setupAuth();
 
