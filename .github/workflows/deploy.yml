@@ -1,0 +1,63 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+        
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          osmarlg/agentes-flow-ui:latest
+          osmarlg/agentes-flow-ui:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Deploy to production server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SSH_PORT }}
+        script: |
+          # Pull latest image
+          docker pull osmarlg/agentes-flow-ui:latest
+          
+          # Stop and remove existing container
+          docker stop agentes-flow-ui || true
+          docker rm agentes-flow-ui || true
+          
+          # Run new container
+          docker run -d \
+            --name agentes-flow-ui \
+            --restart unless-stopped \
+            -p 8080:8080 \
+            -v /root/.openclaw:/root/.openclaw:ro \
+            -e OPENCLAW_HOME=/root/.openclaw \
+            -e OPENCLAW_BIN=openclaw \
+            -e POLL_INTERVAL_MS=30000 \
+            osmarlg/agentes-flow-ui:latest
+          
+          # Clean up old images
+          docker image prune -f

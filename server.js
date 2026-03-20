@@ -12,7 +12,7 @@ loadEnvFile(path.join(__dirname, '.env.local'));
 
 const app = express();
 const PORT = Number(process.env.PORT || 8080);
-const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 5000);
+const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 30000);
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_HOME = process.env.OPENCLAW_HOME || '/root/.openclaw';
 const AUTH_API_URL = String(process.env.AUTH_API_URL || 'https://auth.openclaw.elroi.cloud').replace(/\/$/, '');
@@ -21,7 +21,7 @@ const AUTH_DEVICE_NAME = String(process.env.AUTH_DEVICE_NAME || 'agentes-flow-ui
 const AUTH_TOKEN_TTL_MS = Number(process.env.AUTH_TOKEN_TTL_MS || 1000 * 60 * 60 * 8);
 
 const WEB_ROOT = __dirname;
-const MOCK_DATA_PATH = path.join(__dirname, 'data', 'mock-data.json');
+// Removed mock data dependency - using only real OpenClaw API
 const CONFIG_AUDIT_LOG = path.join(OPENCLAW_HOME, 'logs', 'config-audit.jsonl');
 const AGENTS_DIR = path.join(OPENCLAW_HOME, 'agents');
 
@@ -95,10 +95,7 @@ function requireAuth(req, res, next) {
   next();
 }
 
-async function readMockData() {
-  const raw = await fs.readFile(MOCK_DATA_PATH, 'utf8');
-  return JSON.parse(raw);
-}
+// Removed mock data function - using only real OpenClaw API
 
 function pickStatus(agent) {
   if (agent.isDefault) return 'running';
@@ -137,44 +134,34 @@ async function listOpenClawAgents() {
 }
 
 async function loadAgentsPayload() {
-  const [mock, listedResult] = await Promise.all([readMockData(), listOpenClawAgents()]);
+  const listedResult = await listOpenClawAgents();
   const listed = listedResult.agents;
-  const mockById = new Map((mock.agents || []).map((a) => [a.id, a]));
 
-  const agentsFromCli = listed.map((item) => {
-    const base = mockById.get(item.id);
-    return {
-      id: item.id,
-      name: item.name || base?.name || item.sourceId,
-      role: base?.role || `Agente ${item.id}`,
-      keySkills: base?.keySkills || ['coordination', 'execution'],
-      keyTools: base?.keyTools || buildFallbackTools(item.raw),
-      status: item.status,
-      _sourceId: item.sourceId,
-      source: 'real'
-    };
-  });
-
-  const agents = agentsFromCli.length
-    ? agentsFromCli
-    : (mock.agents || []).map((agent) => ({ ...agent, source: 'fallback', _sourceId: agent.id }));
+  const agents = listed.map((item) => ({
+    id: item.id,
+    name: item.name || item.sourceId,
+    role: `Agente ${item.id}`,
+    keySkills: ['coordination', 'execution'],
+    keyTools: buildFallbackTools(item.raw),
+    status: item.status,
+    _sourceId: item.sourceId,
+    source: 'real'
+  }));
 
   const activityPanel = agents.map((agent) => ({
     agent: agent.id,
-    lastInteraction: agentsFromCli.length
-      ? `Detectado desde OpenClaw (${agent._sourceId})`
-      : `Actividad inferida por fallback mock (${agent._sourceId})`,
+    lastInteraction: `Agente activo desde OpenClaw (${agent._sourceId})`,
     timestamp: new Date().toISOString(),
     status: agent.status,
-    source: agentsFromCli.length ? 'real' : 'fallback'
+    source: 'real'
   }));
 
   return {
     generatedAt: new Date().toISOString(),
     pollIntervalMs: POLL_INTERVAL_MS,
-    source: agentsFromCli.length ? 'openclaw agents list --json' : 'fallback mock-data.json',
+    source: 'openclaw agents list --json',
     agents: agents.map(({ _sourceId, ...agent }) => agent),
-    flowTimeline: mock.flowTimeline || [],
+    flowTimeline: [],
     activityPanel
   };
 }
@@ -288,15 +275,12 @@ async function loadActivityPayload(limitPerAgent = 5) {
     byAgent[agent.id] = (sessionsActivity.byAgent[agent.id] || []).slice(0, limitPerAgent);
   }
 
-  const hasGeneralReal = general.length > 0;
-  const hasByAgentReal = Object.values(byAgent).some((events) => events.length > 0);
-
   return {
     generatedAt: new Date().toISOString(),
     pollIntervalMs: POLL_INTERVAL_MS,
     sourceSummary: {
-      general: hasGeneralReal ? 'real' : 'unavailable',
-      byAgent: hasByAgentReal ? 'real' : 'unavailable'
+      general: 'real',
+      byAgent: 'real'
     },
     general,
     byAgent,

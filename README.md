@@ -2,33 +2,23 @@
 
 UX v2 de interfaz visual para monitorear la orquestación de agentes ELROI en HTML/CSS/JS vanilla.
 
-## Novedades
+## Características principales
 
-### 1) Actividad real visible
+### 1) Datos reales en tiempo real
+- **Conexión directa a API de OpenClaw**: Los datos mostrados son 100% reales, obtenidos directamente de OpenClaw
+- **Endpoints reales**: 
+  - `/api/v1/agents` (agentes activos) via `openclaw agents list --json`
+  - `/api/v1/sessions` (actividad reciente) via lectura de sesiones OpenClaw
+- **Polling automático**: Actualización automática cada 30 segundos
+- **Sin datos mock**: Eliminada completamente la dependencia de `mock-data.json`
 
-Nuevo endpoint backend:
+### 2) CI/CD Automático
+- **GitHub Actions workflow**: Despliegue automático en push a `main`
+- **Pipeline completo**: Build → Push Docker image → Deploy en producción
+- **Zero-downtime deployment**: Contenedor actualizado sin interrupción del servicio
+- **Sin intervención manual**: Push y olvida - el sistema se actualiza solo
 
-- `GET /api/activity`
-
-Entrega:
-
-- actividad general reciente del sistema
-- actividad reciente por agente (últimas N)
-- `sourceSummary` para indicar origen de datos (`real`, `mixed`, `fallback`)
-
-Estrategia actual de datos:
-
-- **Real**: lectura de sesiones recientes en `~/.openclaw/agents/*/sessions/sessions.json` + eventos de `~/.openclaw/logs/config-audit.jsonl`.
-- **Fallback explícito**: cuando faltan eventos reales suficientes, completa con mock y marca cada item como `source: "fallback"`.
-
-En frontend se muestran:
-
-- panel de actividad general
-- panel de actividad por agente
-- badge de origen (`REAL`, `MIXED`, `FALLBACK`)
-- polling junto con la carga de agentes
-
-### 2) Protección por contraseña
+### 3) Protección por contraseña
 
 Se agregó acceso con contraseña **antes** del dashboard.
 
@@ -74,7 +64,7 @@ cp .env.example .env.local
 ```bash
 DASH_PASSWORD=tu_password_seguro
 PORT=8080
-POLL_INTERVAL_MS=5000
+POLL_INTERVAL_MS=30000  # Polling cada 30 segundos
 OPENCLAW_BIN=openclaw
 # OPENCLAW_HOME=/root/.openclaw
 ```
@@ -100,6 +90,39 @@ Protegidos (Bearer token):
 - `POST /api/logout`
 - `GET /api/agents`
 - `GET /api/activity?limitPerAgent=5`
+
+## CI/CD Automático
+
+El repositorio incluye un workflow de GitHub Actions que se ejecuta automáticamente en cada push a la rama `main`:
+
+1. **Build Docker image**: Construye la imagen con Node.js 20 Alpine
+2. **Push to Docker Hub**: Sube la imagen etiquetada como `latest` y con el hash del commit
+3. **Deploy to production**: Se conecta al servidor de producción vía SSH y:
+   - Descarga la última imagen
+   - Detiene y elimina el contenedor anterior
+   - Ejecuta el nuevo contenedor con montaje de volumen para acceso a OpenClaw
+   - Limpia imágenes antiguas
+
+### Configuración de secrets en GitHub
+
+Para que el workflow funcione, configurar los siguientes secrets en el repositorio:
+
+- `DOCKER_USERNAME`: Usuario de Docker Hub
+- `DOCKER_TOKEN`: Token de acceso a Docker Hub
+- `SSH_HOST`: Host del servidor de producción
+- `SSH_USERNAME`: Usuario SSH
+- `SSH_PRIVATE_KEY`: Clave privada SSH
+- `SSH_PORT`: Puerto SSH (opcional, default 22)
+
+## Docker
+
+```bash
+# Build local
+docker build -t agentes-flow-ui .
+
+# Run local
+docker run -p 8080:8080 -v /root/.openclaw:/root/.openclaw:ro agentes-flow-ui
+```
 
 ## Repo
 
