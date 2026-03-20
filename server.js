@@ -15,7 +15,9 @@ const PORT = Number(process.env.PORT || 8080);
 const POLL_INTERVAL_MS = Number(process.env.POLL_INTERVAL_MS || 5000);
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_HOME = process.env.OPENCLAW_HOME || '/root/.openclaw';
-const DASH_PASSWORD = String(process.env.DASH_PASSWORD || '');
+const AUTH_API_URL = String(process.env.AUTH_API_URL || 'https://auth.openclaw.elroi.cloud').replace(/\/$/, '');
+const AUTH_LOGIN = String(process.env.AUTH_LOGIN || process.env.INITIAL_ADMIN_USERNAME || 'admin');
+const AUTH_DEVICE_NAME = String(process.env.AUTH_DEVICE_NAME || 'agentes-flow-ui');
 const AUTH_TOKEN_TTL_MS = Number(process.env.AUTH_TOKEN_TTL_MS || 1000 * 60 * 60 * 8);
 
 const WEB_ROOT = __dirname;
@@ -91,13 +93,6 @@ function requireAuth(req, res, next) {
   }
   req.auth = found;
   next();
-}
-
-function comparePassword(input, expected) {
-  const a = Buffer.from(String(input || ''));
-  const b = Buffer.from(String(expected || ''));
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
 }
 
 async function readMockData() {
@@ -354,21 +349,56 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString(), pollIntervalMs: POLL_INTERVAL_MS });
 });
 
-app.post('/api/login', (req, res) => {
-  if (!DASH_PASSWORD) {
-    return res.status(500).json({ ok: false, error: 'DASH_PASSWORD no configurada en backend' });
-  }
+async function verifyAgainstAuthApi(password) {
+  if (!AUTH_API_URL) return { ok: false, reason: 'AUTH_API_URL no configurada' };
 
+  try {
+    const response = await fetch(`${AUTH_API_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        login: AUTH_LOGIN,
+        password,
+        device_name: AUTH_DEVICE_NAME
+      })
+    });
+
+    if (!response.ok) {
+      return { ok: false, reason: `auth-api status ${response.status}` };
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    const accessToken = payload?.data?.access_token;
+    return { ok: Boolean(accessToken), token: accessToken, payload };
+  } catch (error) {
+    return { ok: false, reason: error.message || 'auth-api unreachable' };
+  }
+}
+
+app.post('/api/login', async (req, res) => {
   const { password } = req.body || {};
-  if (!comparePassword(password, DASH_PASSWORD)) {
-    return res.status(401).json({ ok: false, error: 'Credenciales inválidas' });
+
+  const authApiCheck = await verifyAgainstAuthApi(password);
+
+  if (!authApiCheck.ok) {
+    return res.status(401).json({ ok: false, error: 'Credenciales inválidas', details: authApiCheck.reason });
   }
 
   const token = crypto.randomBytes(24).toString('base64url');
   const expiresAt = Date.now() + AUTH_TOKEN_TTL_MS;
-  sessions.set(token, { createdAt: Date.now(), expiresAt });
+  sessions.set(token, {
+    createdAt: Date.now(),
+    expiresAt,
+    upstreamAuth: 'agents-auth-api'
+  });
 
-  return res.json({ ok: true, token, expiresAt, ttlMs: AUTH_TOKEN_TTL_MS });
+  return res.json({
+    ok: true,
+    token,
+    expiresAt,
+    ttlMs: AUTH_TOKEN_TTL_MS,
+    authSource: 'agents-auth-api'
+  });
 });
 
 app.post('/api/logout', requireAuth, (req, res) => {
