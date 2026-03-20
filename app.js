@@ -391,7 +391,7 @@ function renderGeneralActivity(activityData) {
     ? items
         .slice(0, 8)
         .map(
-          (item) => `<li><span class="activity-meta">${new Date(item.timestamp).toLocaleString('es-ES')} · ${sourceLabel(item.source)}</span><span>${item.agent ? `[${item.agent}] ` : ''}${item.message}</span></li>`
+          (item) => `<li><span class="activity-meta">${formatTimestamp(item.timestamp)} · ${sourceLabel(item.source)}</span><span>${item.agent ? `[${item.agent}] ` : ''}${item.message}</span></li>`
         )
         .join('')
     : source === 'unavailable'
@@ -411,7 +411,7 @@ function renderPerAgentActivity(activityData) {
       const body = (events || []).length
         ? events
             .map(
-              (ev) => `<li><span class="activity-meta">${new Date(ev.timestamp).toLocaleString('es-ES')} · ${sourceLabel(ev.source)}</span><span>${ev.message}</span></li>`
+              (ev) => `<li><span class="activity-meta">${formatTimestamp(ev.timestamp)} · ${sourceLabel(ev.source)}</span><span>${ev.message}</span></li>`
             )
             .join('')
         : '<li>Sin actividad.</li>';
@@ -557,6 +557,12 @@ async function refreshData() {
     const [data, activityData] = await Promise.all([loadAgents(), loadActivity()]);
     pollIntervalMs = Number(data.pollIntervalMs) > 0 ? Number(data.pollIntervalMs) : pollIntervalMs;
     currentData = data;
+    
+    // Update server info if available
+    if (data.serverInfo) {
+      updateServerInfo(data.serverInfo);
+    }
+    
     renderGraph(data, activityData, { fit: firstRender });
     renderGeneralActivity(activityData);
     renderPerAgentActivity(activityData);
@@ -591,9 +597,95 @@ async function checkSession() {
   if (!authToken) return false;
   try {
     const response = await apiFetch('/api/session');
-    return response.ok;
+    if (response.ok) {
+      const data = await response.json();
+      // Update user info if available
+      if (data.user) {
+        updateUserInfo(data.user);
+      }
+      return true;
+    }
+    return false;
   } catch {
     return false;
+  }
+}
+
+function updateUserInfo(user) {
+  const userNameEl = document.getElementById('user-name');
+  if (userNameEl && user) {
+    const displayName = user.name || user.username || 'Usuario';
+    userNameEl.textContent = `👤 ${displayName}`;
+    if (user.email) {
+      userNameEl.title = `Email: ${user.email}`;
+    }
+  }
+}
+
+function formatUptime(seconds) {
+  if (!seconds || seconds < 0) return '0s';
+  
+  const days = Math.floor(seconds / (3600 * 24));
+  const hours = Math.floor((seconds % (3600 * 24)) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+  
+  return parts.join(' ');
+}
+
+function formatTimestamp(timestamp) {
+  if (!timestamp) return '--';
+  
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMins < 1) return 'ahora';
+  if (diffMins < 60) return `hace ${diffMins} min`;
+  if (diffHours < 24) return `hace ${diffHours} h`;
+  if (diffDays === 1) return 'ayer';
+  if (diffDays < 7) return `hace ${diffDays} d`;
+  
+  // For older dates, show actual date
+  return date.toLocaleDateString('es-ES', { 
+    month: 'short', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function updateServerInfo(serverInfo) {
+  if (!serverInfo) return;
+  
+  const hostnameEl = document.getElementById('server-hostname');
+  const runtimeEl = document.getElementById('server-runtime');
+  const uptimeEl = document.getElementById('server-uptime');
+  const versionEl = document.getElementById('server-version');
+  
+  if (hostnameEl) {
+    hostnameEl.textContent = serverInfo.hostname || 'unknown';
+  }
+  
+  if (runtimeEl) {
+    runtimeEl.textContent = `Node ${serverInfo.nodeVersion || 'unknown'}`;
+  }
+  
+  if (uptimeEl) {
+    uptimeEl.textContent = formatUptime(serverInfo.uptime);
+  }
+  
+  if (versionEl) {
+    versionEl.textContent = serverInfo.openclawVersion || 'unknown';
   }
 }
 
@@ -628,6 +720,12 @@ function setupAuth() {
       setAppNotice('');
       setLoginFeedback({ status: 'Acceso concedido. Cargando dashboard…' });
       setAuthenticatedUI(true);
+      
+      // Update user info if available
+      if (payload.user) {
+        updateUserInfo(payload.user);
+      }
+      
       window.scrollTo({ top: 0, behavior: 'smooth' });
       await refreshData();
       setLoginFeedback();

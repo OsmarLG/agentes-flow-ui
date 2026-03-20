@@ -480,3 +480,53 @@ body.auth-ready #app-shell {
   .zoom-reset { min-width: 4.4rem; font-size: 0.78rem; }
   .graph-node { width: 188px; }
 }
+
+/* User info styles */
+.user-info {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.user-info span {
+  background: rgba(59, 130, 246, 0.15);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Server info styles */
+.server-info {
+  background: rgba(2, 6, 23, 0.4);
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  padding: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+
+.server-info-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.server-info-item:last-child {
+  margin-bottom: 0;
+}
+
+.server-info-label {
+  color: #bfdbfe;
+  font-weight: 500;
+}
+
+.server-info-value {
+  color: #d1d5db;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+}
+
+/* Format uptime nicely */
+#server-uptime {
+  color: #86efac;
+}

@@ -45,6 +45,26 @@ const ID_ALIAS = {
   research: 'elroi-research'
 };
 
+// Agent metadata mapping: emoji + friendly name
+const AGENT_METADATA = {
+  'main': { emoji: '👑', name: 'Main', role: 'Agente principal de orquestación' },
+  'dev': { emoji: '🛠️', name: 'ELROI Dev', role: 'Constructor técnico de software' },
+  'elroi-dev': { emoji: '🛠️', name: 'ELROI Dev', role: 'Constructor técnico de software' },
+  'content': { emoji: '📝', name: 'ELROI Content', role: 'Creador de contenido y narrativa' },
+  'elroi-content': { emoji: '📝', name: 'ELROI Content', role: 'Creador de contenido y narrativa' },
+  'ops': { emoji: '⚙️', name: 'ELROI Ops', role: 'Operaciones y automatización' },
+  'elroi-ops': { emoji: '⚙️', name: 'ELROI Ops', role: 'Operaciones y automatización' },
+  'office': { emoji: '🏢', name: 'ELROI Office', role: 'Gestión administrativa y organización' },
+  'elroi-office': { emoji: '🏢', name: 'ELROI Office', role: 'Gestión administrativa y organización' },
+  'agent-factory': { emoji: '🏭', name: 'Agent Factory', role: 'Fábrica de creación de agentes' },
+  'elroi-agent-factory': { emoji: '🏭', name: 'Agent Factory', role: 'Fábrica de creación de agentes' },
+  'elroi-research': { emoji: '🔬', name: 'ELROI Research', role: 'Investigación y análisis' },
+  'research': { emoji: '🔬', name: 'ELROI Research', role: 'Investigación y análisis' }
+};
+
+// Default metadata for unknown agents
+const DEFAULT_AGENT_METADATA = { emoji: '🤖', name: 'Agente', role: 'Agente de OpenClaw' };
+
 function loadEnvFile(filePath) {
   try {
     const raw = fssync.readFileSync(filePath, 'utf8');
@@ -72,6 +92,76 @@ function normalizeId(raw = '') {
   const lower = String(raw).toLowerCase();
   if (ID_ALIAS[lower]) return ID_ALIAS[lower];
   return raw;
+}
+
+function getAgentMetadata(agentId) {
+  const metadata = AGENT_METADATA[agentId] || DEFAULT_AGENT_METADATA;
+  return {
+    emoji: metadata.emoji,
+    friendlyName: metadata.name,
+    role: metadata.role,
+    displayName: `${metadata.emoji} ${metadata.name}`
+  };
+}
+
+async function getServerInfo() {
+  try {
+    const os = require('os');
+    const { execFile } = require('child_process');
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+    
+    const hostname = os.hostname();
+    const uptime = Math.floor(os.uptime());
+    
+    // Try to get OpenClaw version
+    let openclawVersion = 'unknown';
+    try {
+      const result = await execFileAsync('node', [OPENCLAW_MJS, '--version'], { timeout: 5000 });
+      openclawVersion = result.stdout.trim();
+    } catch (e) {
+      try {
+        const result = await execFileAsync(OPENCLAW_BIN, ['--version'], { timeout: 5000 });
+        openclawVersion = result.stdout.trim();
+      } catch (e2) {
+        // Keep default
+      }
+    }
+    
+    // Get Node.js version
+    const nodeVersion = process.version;
+    
+    // Get system info
+    const platform = os.platform();
+    const arch = os.arch();
+    const totalMem = Math.floor(os.totalmem() / (1024 * 1024 * 1024)); // GB
+    const freeMem = Math.floor(os.freemem() / (1024 * 1024 * 1024)); // GB
+    
+    return {
+      hostname,
+      uptime,
+      openclawVersion,
+      nodeVersion,
+      platform,
+      arch,
+      totalMem,
+      freeMem,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    return {
+      hostname: 'unknown',
+      uptime: 0,
+      openclawVersion: 'unknown',
+      nodeVersion: process.version,
+      platform: 'unknown',
+      arch: 'unknown',
+      totalMem: 0,
+      freeMem: 0,
+      timestamp: new Date().toISOString(),
+      error: error.message
+    };
+  }
 }
 
 function cleanupSessions() {
@@ -179,7 +269,10 @@ async function listOpenClawAgents() {
 }
 
 async function loadAgentsPayload() {
-  const listedResult = await listOpenClawAgents();
+  const [listedResult, serverInfo] = await Promise.all([
+    listOpenClawAgents(),
+    getServerInfo()
+  ]);
 
   if (!listedResult.ok) {
     const err = new Error(`No se pudo ejecutar ${listedResult.command}: ${listedResult.error}`);
@@ -190,20 +283,25 @@ async function loadAgentsPayload() {
 
   const listed = listedResult.agents;
 
-  const agents = listed.map((item) => ({
-    id: item.id,
-    name: item.name || item.sourceId,
-    role: `Agente ${item.id}`,
-    keySkills: ['coordination', 'execution'],
-    keyTools: buildFallbackTools(item.raw),
-    status: item.status,
-    _sourceId: item.sourceId,
-    source: 'real'
-  }));
+  const agents = listed.map((item) => {
+    const metadata = getAgentMetadata(item.id);
+    return {
+      id: item.id,
+      name: metadata.displayName, // Use friendly name with emoji
+      friendlyName: metadata.friendlyName,
+      emoji: metadata.emoji,
+      role: metadata.role, // Use descriptive role from metadata
+      keySkills: ['coordination', 'execution'],
+      keyTools: buildFallbackTools(item.raw),
+      status: item.status,
+      _sourceId: item.sourceId,
+      source: 'real'
+    };
+  });
 
   const activityPanel = agents.map((agent) => ({
     agent: agent.id,
-    lastInteraction: `Agente activo desde OpenClaw (${agent._sourceId})`,
+    lastInteraction: `Agente ${agent.friendlyName} activo desde OpenClaw`,
     timestamp: new Date().toISOString(),
     status: agent.status,
     source: 'real'
@@ -220,7 +318,8 @@ async function loadAgentsPayload() {
     },
     agents: agents.map(({ _sourceId, ...agent }) => agent),
     flowTimeline: [],
-    activityPanel
+    activityPanel,
+    serverInfo // Include server info in response
   };
 }
 
@@ -378,7 +477,19 @@ async function verifyAgainstAuthApi(login, password) {
 
     const payload = await response.json().catch(() => ({}));
     const accessToken = payload?.data?.access_token;
-    return { ok: Boolean(accessToken), token: accessToken, payload };
+    const user = payload?.data?.user || {};
+    
+    return { 
+      ok: Boolean(accessToken), 
+      token: accessToken, 
+      payload,
+      user: {
+        id: user.id || null,
+        username: user.username || resolvedLogin,
+        email: user.email || null,
+        name: user.name || resolvedLogin
+      }
+    };
   } catch (error) {
     return { ok: false, reason: error.message || 'auth-api unreachable' };
   }
@@ -398,7 +509,8 @@ app.post('/api/login', async (req, res) => {
   sessions.set(token, {
     createdAt: Date.now(),
     expiresAt,
-    upstreamAuth: 'agents-auth-api'
+    upstreamAuth: 'agents-auth-api',
+    user: authApiCheck.user // Store user info in session
   });
 
   return res.json({
@@ -406,7 +518,8 @@ app.post('/api/login', async (req, res) => {
     token,
     expiresAt,
     ttlMs: AUTH_TOKEN_TTL_MS,
-    authSource: 'agents-auth-api'
+    authSource: 'agents-auth-api',
+    user: authApiCheck.user // Return user info to frontend
   });
 });
 
@@ -417,8 +530,20 @@ app.post('/api/logout', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/session', requireAuth, (_req, res) => {
-  res.json({ ok: true, authenticated: true });
+app.get('/api/session', requireAuth, (req, res) => {
+  res.json({ 
+    ok: true, 
+    authenticated: true,
+    user: req.auth.user // Return user info from session
+  });
+});
+
+// New endpoint to get user info
+app.get('/api/user', requireAuth, (req, res) => {
+  res.json({
+    ok: true,
+    user: req.auth.user
+  });
 });
 
 app.get('/api/agents', requireAuth, async (_req, res) => {

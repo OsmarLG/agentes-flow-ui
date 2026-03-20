@@ -27,8 +27,11 @@
       <div id="app-notice" class="app-notice" hidden aria-live="assertive"></div>
       <header class="topbar">
         <div>
-          <h1>Agentes Flow UI · UX v2</h1>
-          <p>Grafo visual de orquestación estilo n8n lightweight</p>
+          <h1>ELROI · Dashboard de Agentes</h1>
+          <p>Sistema de orquestación y monitorización de agentes OpenClaw</p>
+          <div id="user-info" class="user-info">
+            <span id="user-name">Cargando usuario...</span>
+          </div>
         </div>
         <div class="topbar-actions">
           <div id="last-refresh" class="chip">Cargando datos...</div>
@@ -66,7 +69,31 @@
         </section>
 
         <aside class="panel detail-panel">
-          <h2>Detalle de nodo</h2>
+          <div class="panel-head">
+            <h2>Información del Sistema</h2>
+          </div>
+          <div id="server-info" class="server-info">
+            <div class="server-info-item">
+              <span class="server-info-label">Host:</span>
+              <span id="server-hostname" class="server-info-value">Cargando...</span>
+            </div>
+            <div class="server-info-item">
+              <span class="server-info-label">Runtime:</span>
+              <span id="server-runtime" class="server-info-value">Cargando...</span>
+            </div>
+            <div class="server-info-item">
+              <span class="server-info-label">Uptime:</span>
+              <span id="server-uptime" class="server-info-value">Cargando...</span>
+            </div>
+            <div class="server-info-item">
+              <span class="server-info-label">Versión:</span>
+              <span id="server-version" class="server-info-value">Cargando...</span>
+            </div>
+          </div>
+          
+          <div class="panel-head">
+            <h2>Detalle de Agente</h2>
+          </div>
           <div id="node-detail" class="node-detail empty">
             <p>Haz click en un nodo para ver rol, habilidades y últimas interacciones.</p>
           </div>
